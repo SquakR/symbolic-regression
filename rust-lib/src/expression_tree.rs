@@ -21,9 +21,9 @@ pub enum UnaryOperationKind {
     Arcoth,
 }
 
-pub struct UnaryOperation<'a> {
+pub struct UnaryOperation {
     pub kind: UnaryOperationKind,
-    pub argument: Box<Node<'a>>,
+    pub argument: Box<Node>,
 }
 
 pub enum BinaryOperationKind {
@@ -35,31 +35,26 @@ pub enum BinaryOperationKind {
     Logarithm,
 }
 
-pub struct BinaryOperation<'a> {
+pub struct BinaryOperation {
     pub kind: BinaryOperationKind,
-    pub first_argument: Box<Node<'a>>,
-    pub second_argument: Box<Node<'a>>,
+    pub first_argument: Box<Node>,
+    pub second_argument: Box<Node>,
 }
 
-pub struct Variable {
-    pub name: String,
-    pub value: Option<f64>,
-}
-
-pub enum Value<'a> {
-    Variable(&'a Variable),
+pub enum Value {
+    Variable(String),
     Value(f64),
 }
 
-pub enum Node<'a> {
-    UnaryOperation(UnaryOperation<'a>),
-    BinaryOperation(BinaryOperation<'a>),
-    Value(Value<'a>),
+pub enum Node {
+    UnaryOperation(UnaryOperation),
+    BinaryOperation(BinaryOperation),
+    Value(Value),
 }
 
-pub struct Tree<'a> {
-    root: Node<'a>,
-    variables: Vec<Variable>,
+pub struct Tree {
+    root: Node,
+    variables: Vec<String>,
 }
 
-impl<'a> Tree<'a> {}
+impl Tree {}
