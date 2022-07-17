@@ -1,0 +1,17 @@
+[package]
+name = "symbolic-regression"
+version = "0.1.0"
+authors = ["Artem Orlov <squakrazv@gmail.com>"]
+edition = "2021"
+description = """
+Library for solving the problem of symbolic regression.
+"""
+homepage = "https://github.com/SquakR/symbolic-regression"
+repository = "https://github.com/SquakR/symbolic-regression"
+license = "MIT"
+keywords = ["symbolic regression"]
+categories = ["algorithms", "science"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
