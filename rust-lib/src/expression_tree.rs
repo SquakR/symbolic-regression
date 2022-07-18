@@ -1,9 +1,16 @@
 use std::collections::HashMap;
+use std::f64::{consts::PI, NAN};
+
+pub trait Computable {
+    /// Compute a node by computing all child nodes and performing a node operation.
+    /// Panic if some node contains a variable instead of a constant.
+    /// For computation, the idea of ​​the composite pattern is used.
+    fn compute(&self) -> f64;
+}
 
 #[derive(Copy, Clone)]
 pub enum UnaryOperationKind {
     Inversion,
-    Factorial,
     Exp,
     Ln,
     Sin,
@@ -29,13 +36,46 @@ pub struct UnaryOperation {
     pub argument: Box<Node>,
 }
 
+impl Computable for UnaryOperation {
+    fn compute(&self) -> f64 {
+        let argument_result = self.argument.compute();
+        match self.kind {
+            UnaryOperationKind::Inversion => -argument_result,
+            UnaryOperationKind::Exp => argument_result.exp(),
+            UnaryOperationKind::Ln => argument_result.ln(),
+            UnaryOperationKind::Sin => argument_result.sin(),
+            UnaryOperationKind::Arcsin => argument_result.asin(),
+            UnaryOperationKind::Cos => argument_result.cos(),
+            UnaryOperationKind::Arccos => argument_result.acos(),
+            UnaryOperationKind::Tan => argument_result.tan(),
+            UnaryOperationKind::Arctan => argument_result.atan(),
+            UnaryOperationKind::Cot => 1.0 / argument_result.tan(),
+            UnaryOperationKind::Arccot => PI / 2.0 - argument_result.atan(),
+            UnaryOperationKind::Sinh => argument_result.sinh(),
+            UnaryOperationKind::Arsinh => argument_result.asinh(),
+            UnaryOperationKind::Cosh => argument_result.cosh(),
+            UnaryOperationKind::Arcosh => argument_result.acosh(),
+            UnaryOperationKind::Tanh => argument_result.tanh(),
+            UnaryOperationKind::Artanh => argument_result.atanh(),
+            UnaryOperationKind::Coth => 1.0 / argument_result.tanh(),
+            UnaryOperationKind::Arcoth => {
+                if argument_result < -1.0 || argument_result > 1.0 {
+                    ((argument_result + 1.0) / (argument_result - 1.0)).ln() * 0.5
+                } else {
+                    NAN
+                }
+            }
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub enum BinaryOperationKind {
     Addition,
     Subtraction,
     Multiplication,
     Division,
-    Degree,
+    Power,
     Logarithm,
 }
 
@@ -45,9 +85,33 @@ pub struct BinaryOperation {
     pub second_argument: Box<Node>,
 }
 
+impl Computable for BinaryOperation {
+    fn compute(&self) -> f64 {
+        let first_argument_result = (*self.first_argument).compute();
+        let second_argument_result = (*self.second_argument).compute();
+        match self.kind {
+            BinaryOperationKind::Addition => first_argument_result + second_argument_result,
+            BinaryOperationKind::Subtraction => first_argument_result - second_argument_result,
+            BinaryOperationKind::Multiplication => first_argument_result * second_argument_result,
+            BinaryOperationKind::Division => first_argument_result / second_argument_result,
+            BinaryOperationKind::Power => first_argument_result.powf(second_argument_result),
+            BinaryOperationKind::Logarithm => first_argument_result.log(second_argument_result),
+        }
+    }
+}
+
 pub enum Value {
     Variable(String),
     Constant(f64),
+}
+
+impl Computable for Value {
+    fn compute(&self) -> f64 {
+        match self {
+            Value::Variable(variable) => panic!("{} variable is not a constant.", variable),
+            Value::Constant(constant) => *constant,
+        }
+    }
 }
 
 pub enum Node {
@@ -56,9 +120,25 @@ pub enum Node {
     Value(Value),
 }
 
+impl Computable for Node {
+    fn compute(&self) -> f64 {
+        match self {
+            Node::UnaryOperation(unary_operation) => unary_operation.compute(),
+            Node::BinaryOperation(binary_operation) => binary_operation.compute(),
+            Node::Value(value) => value.compute(),
+        }
+    }
+}
+
 pub struct Tree {
     pub root: Box<Node>,
     pub variables: Vec<String>,
+}
+
+impl Computable for Tree {
+    fn compute(&self) -> f64 {
+        (*self.root).compute()
+    }
 }
 
 impl Tree {
@@ -103,41 +183,19 @@ impl Tree {
 }
 
 #[cfg(test)]
-mod expression_tree_tests {
+mod tests {
     use super::*;
-
-    fn create_test_tree() -> Tree {
-        Tree {
-            root: Box::new(Node::BinaryOperation(BinaryOperation {
-                kind: BinaryOperationKind::Addition,
-                first_argument: Box::new(Node::BinaryOperation(BinaryOperation {
-                    kind: BinaryOperationKind::Multiplication,
-                    first_argument: Box::new(Node::Value(Value::Variable(String::from("x1")))),
-                    second_argument: Box::new(Node::Value(Value::Constant(1.0))),
-                })),
-                second_argument: Box::new(Node::BinaryOperation(BinaryOperation {
-                    kind: BinaryOperationKind::Multiplication,
-                    first_argument: Box::new(Node::UnaryOperation(UnaryOperation {
-                        kind: UnaryOperationKind::Sin,
-                        argument: Box::new(Node::Value(Value::Variable(String::from("x1")))),
-                    })),
-                    second_argument: Box::new(Node::Value(Value::Variable(String::from("x2")))),
-                })),
-            })),
-            variables: vec![String::from("x1"), String::from("x2")],
-        }
-    }
 
     #[test]
     #[should_panic(expected = "Expression tree does not contain y variable.")]
     fn test_subs_panics_with_wrong_variable() {
-        let tree = create_test_tree();
+        let tree = create_subs_test_tree();
         tree.subs(&HashMap::from([("y", 2.0)]));
     }
 
     #[test]
     fn test_subs_x1_variable() {
-        let tree = create_test_tree();
+        let tree = create_subs_test_tree();
         let new_tree = tree.subs(&HashMap::from([("x1", 2.0)]));
         match *new_tree.root {
             Node::BinaryOperation(root_operation) => {
@@ -185,5 +243,339 @@ mod expression_tree_tests {
             }
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "x variable is not a constant.")]
+    fn test_value_compute_variable() {
+        Value::Variable(String::from("x")).compute();
+    }
+
+    #[test]
+    fn test_value_compute_constant() {
+        assert_eq!(1.0_f64, Value::Constant(1.0).compute());
+    }
+
+    #[test]
+    fn test_unary_operation_inversion_compute() {
+        assert_eq!(
+            -1.0_f64,
+            compute_unary_operation(UnaryOperationKind::Inversion)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_exp_compute() {
+        assert_eq!(
+            1.0_f64.exp(),
+            compute_unary_operation(UnaryOperationKind::Exp)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_ln_compute() {
+        assert_eq!(
+            1.0_f64.ln(),
+            compute_unary_operation(UnaryOperationKind::Ln)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_sin_compute() {
+        assert_eq!(
+            1.0_f64.sin(),
+            compute_unary_operation(UnaryOperationKind::Sin)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_arcsin_compute() {
+        assert_eq!(
+            1.0_f64.asin(),
+            compute_unary_operation(UnaryOperationKind::Arcsin)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_cos_compute() {
+        assert_eq!(
+            1.0_f64.cos(),
+            compute_unary_operation(UnaryOperationKind::Cos)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_arccos_compute() {
+        assert_eq!(
+            1.0_f64.acos(),
+            compute_unary_operation(UnaryOperationKind::Arccos)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_tan_compute() {
+        assert_eq!(
+            1.0_f64.tan(),
+            compute_unary_operation(UnaryOperationKind::Tan)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_arctan_compute() {
+        assert_eq!(
+            1.0_f64.atan(),
+            compute_unary_operation(UnaryOperationKind::Arctan)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_cot_compute() {
+        assert_eq!(
+            1.0 / 1.0_f64.tan(),
+            compute_unary_operation(UnaryOperationKind::Cot)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_arccot_compute() {
+        assert_eq!(
+            PI / 2.0 - 1.0_f64.atan(),
+            compute_unary_operation(UnaryOperationKind::Arccot)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_sinh_compute() {
+        assert_eq!(
+            1.0_f64.sinh(),
+            compute_unary_operation(UnaryOperationKind::Sinh)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_arsinh_compute() {
+        assert_eq!(
+            1.0_f64.asinh(),
+            compute_unary_operation(UnaryOperationKind::Arsinh)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_cosh_compute() {
+        assert_eq!(
+            1.0_f64.cosh(),
+            compute_unary_operation(UnaryOperationKind::Cosh)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_arcosh_compute() {
+        assert_eq!(
+            1.0_f64.acosh(),
+            compute_unary_operation(UnaryOperationKind::Arcosh)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_tanh_compute() {
+        assert_eq!(
+            1.0_f64.tanh(),
+            compute_unary_operation(UnaryOperationKind::Tanh)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_artanh_compute() {
+        assert_eq!(
+            1.0_f64.atanh(),
+            compute_unary_operation(UnaryOperationKind::Artanh)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_coth_compute() {
+        assert_eq!(
+            1.0 / 1.0_f64.tanh(),
+            compute_unary_operation(UnaryOperationKind::Coth)
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_arcoth_less_compute() {
+        assert_eq!(
+            ((-1.5_f64 + 1.0_f64) / (-1.5_f64 - 1.0_f64)).ln() * 0.5,
+            UnaryOperation {
+                kind: UnaryOperationKind::Arcoth,
+                argument: Box::new(Node::Value(Value::Constant(-1.5))),
+            }
+            .compute()
+        );
+    }
+
+    #[test]
+    fn test_unary_operation_arcoth_in_wrong_range_compute() {
+        assert!(UnaryOperation {
+            kind: UnaryOperationKind::Arcoth,
+            argument: Box::new(Node::Value(Value::Constant(0.5))),
+        }
+        .compute()
+        .is_nan());
+    }
+
+    #[test]
+    fn test_unary_operation_arcoth_greater_compute() {
+        assert_eq!(
+            ((1.5_f64 + 1.0_f64) / (1.5_f64 - 1.0_f64)).ln() * 0.5,
+            UnaryOperation {
+                kind: UnaryOperationKind::Arcoth,
+                argument: Box::new(Node::Value(Value::Constant(1.5))),
+            }
+            .compute()
+        );
+    }
+
+    #[test]
+    fn test_binary_operation_addition_compute() {
+        assert_eq!(
+            5.0_f64,
+            compute_binary_operation(BinaryOperationKind::Addition)
+        );
+    }
+
+    #[test]
+    fn test_binary_operation_subtraction_compute() {
+        assert_eq!(
+            -1.0_f64,
+            compute_binary_operation(BinaryOperationKind::Subtraction)
+        );
+    }
+
+    #[test]
+    fn test_binary_operation_multiplication_compute() {
+        assert_eq!(
+            6.0_f64,
+            compute_binary_operation(BinaryOperationKind::Multiplication)
+        );
+    }
+
+    #[test]
+    fn test_binary_operation_division_compute() {
+        assert_eq!(
+            2.0_f64 / 3.0_f64,
+            compute_binary_operation(BinaryOperationKind::Division)
+        );
+    }
+
+    #[test]
+    fn test_binary_operation_power_compute() {
+        assert_eq!(
+            2.0_f64.powf(3.0_f64),
+            compute_binary_operation(BinaryOperationKind::Power)
+        );
+    }
+
+    #[test]
+    fn test_binary_operation_logarithm() {
+        assert_eq!(
+            2.0_f64.log(3.0_f64),
+            compute_binary_operation(BinaryOperationKind::Logarithm)
+        );
+    }
+
+    #[test]
+    fn test_node_unary_operation_compute() {
+        assert_eq!(
+            -1.0_f64,
+            Node::UnaryOperation(UnaryOperation {
+                kind: UnaryOperationKind::Inversion,
+                argument: Box::new(Node::Value(Value::Constant(1.0)))
+            })
+            .compute()
+        );
+    }
+
+    #[test]
+    fn test_node_binary_operation_compute() {
+        assert_eq!(
+            4.0_f64,
+            Node::BinaryOperation(BinaryOperation {
+                kind: BinaryOperationKind::Addition,
+                first_argument: Box::new(Node::Value(Value::Constant(2.0))),
+                second_argument: Box::new(Node::Value(Value::Constant(2.0)))
+            })
+            .compute()
+        );
+    }
+
+    #[test]
+    fn test_node_value_operation_compute() {
+        assert_eq!(1.0_f64, Node::Value(Value::Constant(1.0)).compute());
+    }
+
+    #[test]
+    fn test_tree_compute() {
+        let tree = create_compute_test_tree();
+        assert_eq!(2.0_f64 * 3.0_f64 + 5.0_f64.sin() * 10.0_f64, tree.compute());
+    }
+
+    fn create_subs_test_tree() -> Tree {
+        Tree {
+            root: Box::new(Node::BinaryOperation(BinaryOperation {
+                kind: BinaryOperationKind::Addition,
+                first_argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Multiplication,
+                    first_argument: Box::new(Node::Value(Value::Variable(String::from("x1")))),
+                    second_argument: Box::new(Node::Value(Value::Constant(1.0))),
+                })),
+                second_argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Multiplication,
+                    first_argument: Box::new(Node::UnaryOperation(UnaryOperation {
+                        kind: UnaryOperationKind::Sin,
+                        argument: Box::new(Node::Value(Value::Variable(String::from("x1")))),
+                    })),
+                    second_argument: Box::new(Node::Value(Value::Variable(String::from("x2")))),
+                })),
+            })),
+            variables: vec![String::from("x1"), String::from("x2")],
+        }
+    }
+
+    fn create_compute_test_tree() -> Tree {
+        Tree {
+            root: Box::new(Node::BinaryOperation(BinaryOperation {
+                kind: BinaryOperationKind::Addition,
+                first_argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Multiplication,
+                    first_argument: Box::new(Node::Value(Value::Constant(2.0))),
+                    second_argument: Box::new(Node::Value(Value::Constant(3.0))),
+                })),
+                second_argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Multiplication,
+                    first_argument: Box::new(Node::UnaryOperation(UnaryOperation {
+                        kind: UnaryOperationKind::Sin,
+                        argument: Box::new(Node::Value(Value::Constant(5.0))),
+                    })),
+                    second_argument: Box::new(Node::Value(Value::Constant(10.0))),
+                })),
+            })),
+            variables: vec![],
+        }
+    }
+
+    fn compute_unary_operation(kind: UnaryOperationKind) -> f64 {
+        UnaryOperation {
+            kind,
+            argument: Box::new(Node::Value(Value::Constant(1.0))),
+        }
+        .compute()
+    }
+
+    fn compute_binary_operation(kind: BinaryOperationKind) -> f64 {
+        BinaryOperation {
+            kind,
+            first_argument: Box::new(Node::Value(Value::Constant(2.0))),
+            second_argument: Box::new(Node::Value(Value::Constant(3.0))),
+        }
+        .compute()
     }
 }
