@@ -63,7 +63,7 @@ pub struct Tree {
 
 impl Tree {
     /// Return a new Tree where variables have been replaced with values from the `variables` HashMap.
-    /// Panics if `variables` HaspMap contains non-existing variables.
+    /// Panic if `variables` HaspMap contains non-existing variables.
     pub fn subs(&self, variables: &HashMap<&str, f64>) -> Tree {
         for &key in variables.keys() {
             if !self.variables.iter().any(|variable| variable == key) {

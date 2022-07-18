@@ -1,4 +1,4 @@
-mod expression_tree;
+pub mod expression_tree;
 
 #[cfg(test)]
 mod expression_tree_tests {
