@@ -8,7 +8,7 @@ pub trait Computable {
     fn compute(&self) -> f64;
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum UnaryOperationKind {
     Inversion,
     Exp,
@@ -69,7 +69,7 @@ impl Computable for UnaryOperation {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum BinaryOperationKind {
     Addition,
     Subtraction,
@@ -247,157 +247,48 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "x variable is not a constant.")]
-    fn test_value_compute_variable() {
+    fn test_value_variable_compute() {
         Value::Variable(String::from("x")).compute();
     }
 
     #[test]
-    fn test_value_compute_constant() {
+    fn test_value_constant_compute() {
         assert_eq!(1.0_f64, Value::Constant(1.0).compute());
     }
 
     #[test]
-    fn test_unary_operation_inversion_compute() {
-        assert_eq!(
-            -1.0_f64,
-            compute_unary_operation(UnaryOperationKind::Inversion)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_exp_compute() {
-        assert_eq!(
-            1.0_f64.exp(),
-            compute_unary_operation(UnaryOperationKind::Exp)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_ln_compute() {
-        assert_eq!(
-            1.0_f64.ln(),
-            compute_unary_operation(UnaryOperationKind::Ln)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_sin_compute() {
-        assert_eq!(
-            1.0_f64.sin(),
-            compute_unary_operation(UnaryOperationKind::Sin)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_arcsin_compute() {
-        assert_eq!(
-            1.0_f64.asin(),
-            compute_unary_operation(UnaryOperationKind::Arcsin)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_cos_compute() {
-        assert_eq!(
-            1.0_f64.cos(),
-            compute_unary_operation(UnaryOperationKind::Cos)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_arccos_compute() {
-        assert_eq!(
-            1.0_f64.acos(),
-            compute_unary_operation(UnaryOperationKind::Arccos)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_tan_compute() {
-        assert_eq!(
-            1.0_f64.tan(),
-            compute_unary_operation(UnaryOperationKind::Tan)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_arctan_compute() {
-        assert_eq!(
-            1.0_f64.atan(),
-            compute_unary_operation(UnaryOperationKind::Arctan)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_cot_compute() {
-        assert_eq!(
-            1.0 / 1.0_f64.tan(),
-            compute_unary_operation(UnaryOperationKind::Cot)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_arccot_compute() {
-        assert_eq!(
-            PI / 2.0 - 1.0_f64.atan(),
-            compute_unary_operation(UnaryOperationKind::Arccot)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_sinh_compute() {
-        assert_eq!(
-            1.0_f64.sinh(),
-            compute_unary_operation(UnaryOperationKind::Sinh)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_arsinh_compute() {
-        assert_eq!(
-            1.0_f64.asinh(),
-            compute_unary_operation(UnaryOperationKind::Arsinh)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_cosh_compute() {
-        assert_eq!(
-            1.0_f64.cosh(),
-            compute_unary_operation(UnaryOperationKind::Cosh)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_arcosh_compute() {
-        assert_eq!(
-            1.0_f64.acosh(),
-            compute_unary_operation(UnaryOperationKind::Arcosh)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_tanh_compute() {
-        assert_eq!(
-            1.0_f64.tanh(),
-            compute_unary_operation(UnaryOperationKind::Tanh)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_artanh_compute() {
-        assert_eq!(
-            1.0_f64.atanh(),
-            compute_unary_operation(UnaryOperationKind::Artanh)
-        );
-    }
-
-    #[test]
-    fn test_unary_operation_coth_compute() {
-        assert_eq!(
-            1.0 / 1.0_f64.tanh(),
-            compute_unary_operation(UnaryOperationKind::Coth)
-        );
+    fn test_unary_operation_compute() {
+        for (expected, kind) in [
+            (-1.0_f64, UnaryOperationKind::Inversion),
+            (1.0_f64.exp(), UnaryOperationKind::Exp),
+            (1.0_f64.ln(), UnaryOperationKind::Ln),
+            (1.0_f64.sin(), UnaryOperationKind::Sin),
+            (1.0_f64.asin(), UnaryOperationKind::Arcsin),
+            (1.0_f64.cos(), UnaryOperationKind::Cos),
+            (1.0_f64.acos(), UnaryOperationKind::Arccos),
+            (1.0_f64.tan(), UnaryOperationKind::Tan),
+            (1.0_f64.atan(), UnaryOperationKind::Arctan),
+            (1.0 / 1.0_f64.tan(), UnaryOperationKind::Cot),
+            (PI / 2.0 - 1.0_f64.atan(), UnaryOperationKind::Arccot),
+            (1.0_f64.sinh(), UnaryOperationKind::Sinh),
+            (1.0_f64.asinh(), UnaryOperationKind::Arsinh),
+            (1.0_f64.cosh(), UnaryOperationKind::Cosh),
+            (1.0_f64.acosh(), UnaryOperationKind::Arcosh),
+            (1.0_f64.tanh(), UnaryOperationKind::Tanh),
+            (1.0_f64.atanh(), UnaryOperationKind::Artanh),
+            (1.0 / 1.0_f64.tanh(), UnaryOperationKind::Coth),
+        ] {
+            let actual = UnaryOperation {
+                kind,
+                argument: Box::new(Node::Value(Value::Constant(1.0))),
+            }
+            .compute();
+            assert_eq!(
+                expected, actual,
+                "For {:?} kind expected {:.3} but got {:.3}.",
+                kind, expected, actual
+            )
+        }
     }
 
     #[test]
@@ -435,51 +326,27 @@ mod tests {
     }
 
     #[test]
-    fn test_binary_operation_addition_compute() {
-        assert_eq!(
-            5.0_f64,
-            compute_binary_operation(BinaryOperationKind::Addition)
-        );
-    }
-
-    #[test]
-    fn test_binary_operation_subtraction_compute() {
-        assert_eq!(
-            -1.0_f64,
-            compute_binary_operation(BinaryOperationKind::Subtraction)
-        );
-    }
-
-    #[test]
-    fn test_binary_operation_multiplication_compute() {
-        assert_eq!(
-            6.0_f64,
-            compute_binary_operation(BinaryOperationKind::Multiplication)
-        );
-    }
-
-    #[test]
-    fn test_binary_operation_division_compute() {
-        assert_eq!(
-            2.0_f64 / 3.0_f64,
-            compute_binary_operation(BinaryOperationKind::Division)
-        );
-    }
-
-    #[test]
-    fn test_binary_operation_power_compute() {
-        assert_eq!(
-            2.0_f64.powf(3.0_f64),
-            compute_binary_operation(BinaryOperationKind::Power)
-        );
-    }
-
-    #[test]
-    fn test_binary_operation_logarithm() {
-        assert_eq!(
-            2.0_f64.log(3.0_f64),
-            compute_binary_operation(BinaryOperationKind::Logarithm)
-        );
+    fn text_binary_operation_compute() {
+        for (expected, kind) in [
+            (5.0_f64, BinaryOperationKind::Addition),
+            (-1.0_f64, BinaryOperationKind::Subtraction),
+            (6.0_f64, BinaryOperationKind::Multiplication),
+            (2.0_f64 / 3.0_f64, BinaryOperationKind::Division),
+            (2.0_f64.powf(3.0_f64), BinaryOperationKind::Power),
+            (2.0_f64.log(3.0_f64), BinaryOperationKind::Logarithm),
+        ] {
+            let actual = BinaryOperation {
+                kind,
+                first_argument: Box::new(Node::Value(Value::Constant(2.0))),
+                second_argument: Box::new(Node::Value(Value::Constant(3.0))),
+            }
+            .compute();
+            assert_eq!(
+                expected, actual,
+                "For {:?} kind expected {:.3} but got {:.3}.",
+                kind, expected, actual
+            )
+        }
     }
 
     #[test]
@@ -560,22 +427,5 @@ mod tests {
             })),
             variables: vec![],
         }
-    }
-
-    fn compute_unary_operation(kind: UnaryOperationKind) -> f64 {
-        UnaryOperation {
-            kind,
-            argument: Box::new(Node::Value(Value::Constant(1.0))),
-        }
-        .compute()
-    }
-
-    fn compute_binary_operation(kind: BinaryOperationKind) -> f64 {
-        BinaryOperation {
-            kind,
-            first_argument: Box::new(Node::Value(Value::Constant(2.0))),
-            second_argument: Box::new(Node::Value(Value::Constant(3.0))),
-        }
-        .compute()
     }
 }
