@@ -1,19 +1,6 @@
 use std::collections::HashMap;
 use std::f64::{consts::PI, NAN};
 
-#[derive(Debug, Clone)]
-pub struct ComputeError {
-    pub message: String,
-}
-
-impl ComputeError {
-    fn new(variable: &str) -> ComputeError {
-        ComputeError {
-            message: format!("{} variable is not a constant.", variable),
-        }
-    }
-}
-
 pub trait Computable {
     /// Compute a node by computing all child nodes and performing a node operation.
     /// Return `ComputeError` if some node contains a variable instead of a constant.
@@ -22,6 +9,87 @@ pub trait Computable {
     /// Simplify a node by replacing all child nodes that can be computed with values.
     /// For example, sin(x + 2,0 * (3.0 + 2.0)) -> sin(x + 14.0)
     fn simplify(&mut self) -> ();
+}
+
+pub struct Tree {
+    pub root: Box<Node>,
+    pub variables: Vec<String>,
+}
+
+impl Computable for Tree {
+    fn compute(&self) -> Result<f64, ComputeError> {
+        (*self.root).compute()
+    }
+    fn simplify(&mut self) -> () {
+        match self.compute() {
+            Ok(value) => self.root = Box::new(Node::Value(Value::Constant(value))),
+            Err(_) => self.root.simplify(),
+        }
+    }
+}
+
+impl Tree {
+    /// Return a new Tree where variables have been replaced with values from the `variables` HashMap.
+    /// Panic if `variables` HaspMap contains non-existing variables.
+    pub fn subs(&self, variables: &HashMap<&str, f64>) -> Tree {
+        for &key in variables.keys() {
+            if !self.variables.iter().any(|variable| variable == key) {
+                panic!("Expression tree does not contain {} variable.", key);
+            }
+        }
+        Tree {
+            root: Tree::subs_node(&self.root, variables),
+            variables: self
+                .variables
+                .clone()
+                .into_iter()
+                .filter(|variable| !variables.keys().any(|key| key == variable))
+                .collect(),
+        }
+    }
+    fn subs_node(node: &Box<Node>, variables: &HashMap<&str, f64>) -> Box<Node> {
+        match &**node {
+            Node::UnaryOperation(operation) => Box::new(Node::UnaryOperation(UnaryOperation {
+                kind: operation.kind,
+                argument: Tree::subs_node(&operation.argument, variables),
+            })),
+            Node::BinaryOperation(operation) => Box::new(Node::BinaryOperation(BinaryOperation {
+                kind: operation.kind,
+                first_argument: Tree::subs_node(&operation.first_argument, variables),
+                second_argument: Tree::subs_node(&operation.second_argument, variables),
+            })),
+            Node::Value(value) => match value {
+                Value::Constant(value) => Box::new(Node::Value(Value::Constant(*value))),
+                Value::Variable(variable) => match variables.get(variable.as_str()) {
+                    Some(constant) => Box::new(Node::Value(Value::Constant(*constant))),
+                    None => Box::new(Node::Value(Value::Variable(variable.to_string()))),
+                },
+            },
+        }
+    }
+}
+
+pub enum Node {
+    UnaryOperation(UnaryOperation),
+    BinaryOperation(BinaryOperation),
+    Value(Value),
+}
+
+impl Computable for Node {
+    fn compute(&self) -> Result<f64, ComputeError> {
+        match self {
+            Node::UnaryOperation(unary_operation) => unary_operation.compute(),
+            Node::BinaryOperation(binary_operation) => binary_operation.compute(),
+            Node::Value(value) => value.compute(),
+        }
+    }
+    fn simplify(&mut self) -> () {
+        match self {
+            Node::UnaryOperation(unary_operation) => unary_operation.simplify(),
+            Node::BinaryOperation(binary_operation) => binary_operation.simplify(),
+            Node::Value(value) => value.simplify(),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -171,83 +239,15 @@ impl Computable for Value {
     fn simplify(&mut self) -> () {}
 }
 
-pub enum Node {
-    UnaryOperation(UnaryOperation),
-    BinaryOperation(BinaryOperation),
-    Value(Value),
+#[derive(Debug, Clone)]
+pub struct ComputeError {
+    pub message: String,
 }
 
-impl Computable for Node {
-    fn compute(&self) -> Result<f64, ComputeError> {
-        match self {
-            Node::UnaryOperation(unary_operation) => unary_operation.compute(),
-            Node::BinaryOperation(binary_operation) => binary_operation.compute(),
-            Node::Value(value) => value.compute(),
-        }
-    }
-    fn simplify(&mut self) -> () {
-        match self {
-            Node::UnaryOperation(unary_operation) => unary_operation.simplify(),
-            Node::BinaryOperation(binary_operation) => binary_operation.simplify(),
-            Node::Value(value) => value.simplify(),
-        }
-    }
-}
-
-pub struct Tree {
-    pub root: Box<Node>,
-    pub variables: Vec<String>,
-}
-
-impl Computable for Tree {
-    fn compute(&self) -> Result<f64, ComputeError> {
-        (*self.root).compute()
-    }
-    fn simplify(&mut self) -> () {
-        match self.compute() {
-            Ok(value) => self.root = Box::new(Node::Value(Value::Constant(value))),
-            Err(_) => self.root.simplify(),
-        }
-    }
-}
-
-impl Tree {
-    /// Return a new Tree where variables have been replaced with values from the `variables` HashMap.
-    /// Panic if `variables` HaspMap contains non-existing variables.
-    pub fn subs(&self, variables: &HashMap<&str, f64>) -> Tree {
-        for &key in variables.keys() {
-            if !self.variables.iter().any(|variable| variable == key) {
-                panic!("Expression tree does not contain {} variable.", key);
-            }
-        }
-        Tree {
-            root: Tree::subs_node(&self.root, variables),
-            variables: self
-                .variables
-                .clone()
-                .into_iter()
-                .filter(|variable| !variables.keys().any(|key| key == variable))
-                .collect(),
-        }
-    }
-    fn subs_node(node: &Box<Node>, variables: &HashMap<&str, f64>) -> Box<Node> {
-        match &**node {
-            Node::UnaryOperation(operation) => Box::new(Node::UnaryOperation(UnaryOperation {
-                kind: operation.kind,
-                argument: Tree::subs_node(&operation.argument, variables),
-            })),
-            Node::BinaryOperation(operation) => Box::new(Node::BinaryOperation(BinaryOperation {
-                kind: operation.kind,
-                first_argument: Tree::subs_node(&operation.first_argument, variables),
-                second_argument: Tree::subs_node(&operation.second_argument, variables),
-            })),
-            Node::Value(value) => match value {
-                Value::Constant(value) => Box::new(Node::Value(Value::Constant(*value))),
-                Value::Variable(variable) => match variables.get(variable.as_str()) {
-                    Some(constant) => Box::new(Node::Value(Value::Constant(*constant))),
-                    None => Box::new(Node::Value(Value::Variable(variable.to_string()))),
-                },
-            },
+impl ComputeError {
+    fn new(variable: &str) -> ComputeError {
+        ComputeError {
+            message: format!("{} variable is not a constant.", variable),
         }
     }
 }
