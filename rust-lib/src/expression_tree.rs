@@ -19,6 +19,9 @@ pub trait Computable {
     /// Return `ComputeError` if some node contains a variable instead of a constant.
     /// For computation, the idea of ​​the composite pattern is used.
     fn compute(&self) -> Result<f64, ComputeError>;
+    /// Simplify a node by replacing all child nodes that can be computed with values.
+    /// For example, sin(x + 2,0 * (3.0 + 2.0)) -> sin(x + 14.0)
+    fn simplify(&mut self) -> ();
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -80,6 +83,24 @@ impl Computable for UnaryOperation {
             }
         }
     }
+    fn simplify(&mut self) -> () {
+        let mut computation_result: Option<Result<f64, ComputeError>> = None;
+        match &*self.argument {
+            Node::UnaryOperation(unary_operation) => {
+                computation_result = Some(unary_operation.compute())
+            }
+            Node::BinaryOperation(binary_operation) => {
+                computation_result = Some(binary_operation.compute())
+            }
+            _ => {}
+        }
+        if let Some(result) = computation_result {
+            match result {
+                Ok(value) => self.argument = Box::new(Node::Value(Value::Constant(value))),
+                Err(_) => (*self.argument).simplify(),
+            }
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -113,6 +134,26 @@ impl Computable for BinaryOperation {
             BinaryOperationKind::Logarithm => Ok(first_argument_result.log(second_argument_result)),
         }
     }
+    fn simplify(&mut self) -> () {
+        for argument in [&mut self.first_argument, &mut self.second_argument] {
+            let mut computation_result: Option<Result<f64, ComputeError>> = None;
+            match &**argument {
+                Node::UnaryOperation(unary_operation) => {
+                    computation_result = Some(unary_operation.compute())
+                }
+                Node::BinaryOperation(binary_operation) => {
+                    computation_result = Some(binary_operation.compute())
+                }
+                _ => {}
+            }
+            if let Some(result) = computation_result {
+                match result {
+                    Ok(value) => *argument = Box::new(Node::Value(Value::Constant(value))),
+                    Err(_) => (argument).simplify(),
+                }
+            }
+        }
+    }
 }
 
 pub enum Value {
@@ -127,6 +168,7 @@ impl Computable for Value {
             Value::Constant(constant) => Ok(*constant),
         }
     }
+    fn simplify(&mut self) -> () {}
 }
 
 pub enum Node {
@@ -143,6 +185,13 @@ impl Computable for Node {
             Node::Value(value) => value.compute(),
         }
     }
+    fn simplify(&mut self) -> () {
+        match self {
+            Node::UnaryOperation(unary_operation) => unary_operation.simplify(),
+            Node::BinaryOperation(binary_operation) => binary_operation.simplify(),
+            Node::Value(value) => value.simplify(),
+        }
+    }
 }
 
 pub struct Tree {
@@ -153,6 +202,12 @@ pub struct Tree {
 impl Computable for Tree {
     fn compute(&self) -> Result<f64, ComputeError> {
         (*self.root).compute()
+    }
+    fn simplify(&mut self) -> () {
+        match self.compute() {
+            Ok(value) => self.root = Box::new(Node::Value(Value::Constant(value))),
+            Err(_) => self.root.simplify(),
+        }
     }
 }
 
@@ -418,6 +473,59 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_tree_without_variables_simplify() {
+        let mut tree = create_test_tree_without_variables();
+        tree.simplify();
+        match *tree.root {
+            Node::Value(value) => match value {
+                Value::Constant(constant) => {
+                    assert_eq!(2.0_f64 * 3.0_f64 + 5.0_f64.sin() * 10.0_f64, constant)
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_tree_to_simplify_simplify() {
+        let mut tree = create_tree_to_simplify();
+        tree.simplify();
+        match *tree.root {
+            Node::UnaryOperation(unary_operation) => {
+                match unary_operation.kind {
+                    UnaryOperationKind::Sin => {}
+                    _ => unreachable!(),
+                }
+                match *unary_operation.argument {
+                    Node::BinaryOperation(binary_operation) => {
+                        match binary_operation.kind {
+                            BinaryOperationKind::Addition => {}
+                            _ => unreachable!(),
+                        }
+                        match *binary_operation.first_argument {
+                            Node::Value(value) => match value {
+                                Value::Variable(variable) => assert_eq!("x", variable),
+                                _ => unreachable!(),
+                            },
+                            _ => unreachable!(),
+                        }
+                        match *binary_operation.second_argument {
+                            Node::Value(value) => match value {
+                                Value::Constant(constant) => assert_eq!(14.0_f64, constant),
+                                _ => unreachable!(),
+                            },
+                            _ => unreachable!(),
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn create_test_tree_with_variables() -> Tree {
         Tree {
             root: Box::new(Node::BinaryOperation(BinaryOperation {
@@ -459,6 +567,28 @@ mod tests {
                 })),
             })),
             variables: vec![],
+        }
+    }
+
+    fn create_tree_to_simplify() -> Tree {
+        Tree {
+            root: Box::new(Node::UnaryOperation(UnaryOperation {
+                kind: UnaryOperationKind::Sin,
+                argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Addition,
+                    first_argument: Box::new(Node::Value(Value::Variable(String::from("x")))),
+                    second_argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                        kind: BinaryOperationKind::Multiplication,
+                        first_argument: Box::new(Node::Value(Value::Constant(2.0))),
+                        second_argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                            kind: BinaryOperationKind::Addition,
+                            first_argument: Box::new(Node::Value(Value::Constant(3.0))),
+                            second_argument: Box::new(Node::Value(Value::Constant(4.0))),
+                        })),
+                    })),
+                })),
+            })),
+            variables: vec![String::from("x")],
         }
     }
 }
