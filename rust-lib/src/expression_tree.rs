@@ -1,3 +1,4 @@
+/// Expression tree core functionality module.
 use std::collections::HashMap;
 use std::f64::{consts::PI, NAN};
 
@@ -11,12 +12,12 @@ pub trait Computable {
     fn simplify(&mut self) -> ();
 }
 
-pub struct Tree {
+pub struct ExpressionTree {
     pub root: Box<Node>,
     pub variables: Vec<String>,
 }
 
-impl Computable for Tree {
+impl Computable for ExpressionTree {
     fn compute(&self) -> Result<f64, ComputeError> {
         (*self.root).compute()
     }
@@ -28,17 +29,17 @@ impl Computable for Tree {
     }
 }
 
-impl Tree {
-    /// Return a new Tree where variables have been replaced with values from the `variables` HashMap.
+impl ExpressionTree {
+    /// Return a new ExpressionTree where variables have been replaced with values from the `variables` HashMap.
     /// Panic if `variables` HaspMap contains non-existing variables.
-    pub fn subs(&self, variables: &HashMap<&str, f64>) -> Tree {
+    pub fn subs(&self, variables: &HashMap<&str, f64>) -> ExpressionTree {
         for &key in variables.keys() {
             if !self.variables.iter().any(|variable| variable == key) {
                 panic!("Expression tree does not contain {} variable.", key);
             }
         }
-        Tree {
-            root: Tree::subs_node(&self.root, variables),
+        ExpressionTree {
+            root: ExpressionTree::subs_node(&self.root, variables),
             variables: self
                 .variables
                 .clone()
@@ -51,12 +52,12 @@ impl Tree {
         match &**node {
             Node::UnaryOperation(operation) => Box::new(Node::UnaryOperation(UnaryOperation {
                 kind: operation.kind,
-                argument: Tree::subs_node(&operation.argument, variables),
+                argument: ExpressionTree::subs_node(&operation.argument, variables),
             })),
             Node::BinaryOperation(operation) => Box::new(Node::BinaryOperation(BinaryOperation {
                 kind: operation.kind,
-                first_argument: Tree::subs_node(&operation.first_argument, variables),
-                second_argument: Tree::subs_node(&operation.second_argument, variables),
+                first_argument: ExpressionTree::subs_node(&operation.first_argument, variables),
+                second_argument: ExpressionTree::subs_node(&operation.second_argument, variables),
             })),
             Node::Value(value) => match value {
                 Value::Constant(value) => Box::new(Node::Value(Value::Constant(*value))),
@@ -526,8 +527,8 @@ mod tests {
         }
     }
 
-    fn create_test_tree_with_variables() -> Tree {
-        Tree {
+    fn create_test_tree_with_variables() -> ExpressionTree {
+        ExpressionTree {
             root: Box::new(Node::BinaryOperation(BinaryOperation {
                 kind: BinaryOperationKind::Addition,
                 first_argument: Box::new(Node::BinaryOperation(BinaryOperation {
@@ -548,8 +549,8 @@ mod tests {
         }
     }
 
-    fn create_test_tree_without_variables() -> Tree {
-        Tree {
+    fn create_test_tree_without_variables() -> ExpressionTree {
+        ExpressionTree {
             root: Box::new(Node::BinaryOperation(BinaryOperation {
                 kind: BinaryOperationKind::Addition,
                 first_argument: Box::new(Node::BinaryOperation(BinaryOperation {
@@ -570,8 +571,8 @@ mod tests {
         }
     }
 
-    fn create_tree_to_simplify() -> Tree {
-        Tree {
+    fn create_tree_to_simplify() -> ExpressionTree {
+        ExpressionTree {
             root: Box::new(Node::UnaryOperation(UnaryOperation {
                 kind: UnaryOperationKind::Sin,
                 argument: Box::new(Node::BinaryOperation(BinaryOperation {
