@@ -95,9 +95,6 @@ impl Computable for Node {
 
 #[derive(Debug, Copy, Clone)]
 pub enum UnaryOperationKind {
-    Inversion,
-    Exp,
-    Ln,
     Sin,
     Arcsin,
     Cos,
@@ -125,9 +122,6 @@ impl Computable for UnaryOperation {
     fn compute(&self) -> Result<f64, ComputeError> {
         let argument_result = self.argument.compute()?;
         match self.kind {
-            UnaryOperationKind::Inversion => Ok(-argument_result),
-            UnaryOperationKind::Exp => Ok(argument_result.exp()),
-            UnaryOperationKind::Ln => Ok(argument_result.ln()),
             UnaryOperationKind::Sin => Ok(argument_result.sin()),
             UnaryOperationKind::Arcsin => Ok(argument_result.asin()),
             UnaryOperationKind::Cos => Ok(argument_result.cos()),
@@ -333,9 +327,6 @@ mod tests {
     #[test]
     fn test_unary_operation_compute() -> Result<(), ComputeError> {
         for (expected, kind) in [
-            (-1.0_f64, UnaryOperationKind::Inversion),
-            (1.0_f64.exp(), UnaryOperationKind::Exp),
-            (1.0_f64.ln(), UnaryOperationKind::Ln),
             (1.0_f64.sin(), UnaryOperationKind::Sin),
             (1.0_f64.asin(), UnaryOperationKind::Arcsin),
             (1.0_f64.cos(), UnaryOperationKind::Cos),
@@ -433,11 +424,11 @@ mod tests {
     #[test]
     fn test_node_unary_operation_compute() -> Result<(), ComputeError> {
         let actual = Node::UnaryOperation(UnaryOperation {
-            kind: UnaryOperationKind::Inversion,
+            kind: UnaryOperationKind::Sin,
             argument: Box::new(Node::Value(Value::Constant(1.0))),
         })
         .compute()?;
-        assert_eq!(-1.0_f64, actual);
+        assert_eq!(1.0_f64.sin(), actual);
         Ok(())
     }
 
