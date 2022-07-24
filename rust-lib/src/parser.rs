@@ -2,6 +2,7 @@
 /// The parser uses the shunting yard algorithm.
 /// https://en.wikipedia.org/wiki/Shunting_yard_algorithm
 use crate::expression_tree::{ExpressionTree, Node, Value};
+use std::cmp::Ordering;
 
 impl ExpressionTree {
     pub fn parse(expression: &str) -> ExpressionTree {
@@ -12,10 +13,10 @@ impl ExpressionTree {
     }
 }
 
-fn perform_lexical_analysis(input: &str) -> Vec<Token> {
+fn perform_lexical_analysis(expression: &str) -> Vec<Token> {
     let mut tokens = vec![];
     let mut string = String::new();
-    for c in input.chars() {
+    for c in expression.chars() {
         if c.is_whitespace() {
             continue;
         }
@@ -129,7 +130,7 @@ enum Function {
     Log,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 enum Operator {
     Plus,
     Minus,
@@ -138,13 +139,42 @@ enum Operator {
     Circumflex,
 }
 
+impl Operator {
+    fn get_precedence(&self) -> u8 {
+        match self {
+            Operator::Plus => 1,
+            Operator::Minus => 1,
+            Operator::Asterisk => 2,
+            Operator::Slash => 2,
+            Operator::Circumflex => 3,
+        }
+    }
+}
+
+impl Ord for Operator {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.get_precedence().cmp(&other.get_precedence())
+    }
+}
+
+impl PartialOrd for Operator {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_parse() {
-        assert_eq!(0.0, 0.0);
+    fn test_operator_ordering() {
+        assert!(Operator::Plus <= Operator::Minus);
+        assert!(Operator::Minus <= Operator::Plus);
+        assert!(Operator::Asterisk <= Operator::Slash);
+        assert!(Operator::Slash <= Operator::Asterisk);
+        assert!(Operator::Plus < Operator::Asterisk);
+        assert!(Operator::Asterisk < Operator::Circumflex);
     }
 
     #[test]
@@ -276,5 +306,10 @@ mod tests {
             ],
             perform_lexical_analysis("log(2.0, x) + cos(0.0) - x")
         );
+    }
+
+    #[test]
+    fn test_parse() {
+        assert_eq!(0.0, 0.0);
     }
 }
