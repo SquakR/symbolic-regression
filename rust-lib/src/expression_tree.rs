@@ -2,6 +2,12 @@
 use std::collections::HashMap;
 use std::f64::{consts::PI, NAN};
 
+#[derive(Debug, PartialEq)]
+pub struct ExpressionTree {
+    pub root: Box<Node>,
+    pub variables: Vec<String>,
+}
+
 pub trait Computable {
     /// Compute a node by computing all child nodes and performing a node operation.
     /// Return `ComputeError` if some node contains a variable instead of a constant.
@@ -12,9 +18,17 @@ pub trait Computable {
     fn simplify(&mut self) -> ();
 }
 
-pub struct ExpressionTree {
-    pub root: Box<Node>,
-    pub variables: Vec<String>,
+#[derive(Debug, Clone)]
+pub struct ComputeError {
+    pub message: String,
+}
+
+impl ComputeError {
+    fn new(variable: &str) -> ComputeError {
+        ComputeError {
+            message: format!("{} variable is not a constant.", variable),
+        }
+    }
 }
 
 impl Computable for ExpressionTree {
@@ -70,6 +84,7 @@ impl ExpressionTree {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Node {
     UnaryOperation(UnaryOperation),
     BinaryOperation(BinaryOperation),
@@ -93,7 +108,7 @@ impl Computable for Node {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum UnaryOperationKind {
     Sin,
     Arcsin,
@@ -113,6 +128,7 @@ pub enum UnaryOperationKind {
     Arcoth,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct UnaryOperation {
     pub kind: UnaryOperationKind,
     pub argument: Box<Node>,
@@ -166,7 +182,7 @@ impl Computable for UnaryOperation {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BinaryOperationKind {
     Addition,
     Subtraction,
@@ -176,6 +192,7 @@ pub enum BinaryOperationKind {
     Logarithm,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct BinaryOperation {
     pub kind: BinaryOperationKind,
     pub first_argument: Box<Node>,
@@ -219,6 +236,7 @@ impl Computable for BinaryOperation {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Value {
     Variable(String),
     Constant(f64),
@@ -232,19 +250,6 @@ impl Computable for Value {
         }
     }
     fn simplify(&mut self) -> () {}
-}
-
-#[derive(Debug, Clone)]
-pub struct ComputeError {
-    pub message: String,
-}
-
-impl ComputeError {
-    fn new(variable: &str) -> ComputeError {
-        ComputeError {
-            message: format!("{} variable is not a constant.", variable),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -261,53 +266,27 @@ mod tests {
     #[test]
     fn test_subs_x1_variable() {
         let tree = create_test_tree_with_variables();
-        let new_tree = tree.subs(&HashMap::from([("x1", 2.0)]));
-        match *new_tree.root {
-            Node::BinaryOperation(root_operation) => {
-                match *root_operation.first_argument {
-                    Node::BinaryOperation(root_first_argument_operation) => {
-                        match *root_first_argument_operation.first_argument {
-                            Node::Value(value) => match value {
-                                Value::Constant(constant) => assert_eq!(2.0, constant),
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        }
-                        match *root_first_argument_operation.second_argument {
-                            Node::Value(value) => match value {
-                                Value::Constant(constant) => assert_eq!(1.0, constant),
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-                match *root_operation.second_argument {
-                    Node::BinaryOperation(root_second_argument_operation) => {
-                        match *root_second_argument_operation.first_argument {
-                            Node::UnaryOperation(operation) => match *operation.argument {
-                                Node::Value(value) => match value {
-                                    Value::Constant(constant) => assert_eq!(2.0, constant),
-                                    _ => unreachable!(),
-                                },
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        }
-                        match *root_second_argument_operation.second_argument {
-                            Node::Value(value) => match value {
-                                Value::Variable(variable) => assert_eq!("x2", variable),
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            _ => unreachable!(),
-        }
+        let expected_tree = ExpressionTree {
+            root: Box::new(Node::BinaryOperation(BinaryOperation {
+                kind: BinaryOperationKind::Addition,
+                first_argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Multiplication,
+                    first_argument: Box::new(Node::Value(Value::Constant(2.0))),
+                    second_argument: Box::new(Node::Value(Value::Constant(1.0))),
+                })),
+                second_argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Multiplication,
+                    first_argument: Box::new(Node::UnaryOperation(UnaryOperation {
+                        kind: UnaryOperationKind::Sin,
+                        argument: Box::new(Node::Value(Value::Constant(2.0))),
+                    })),
+                    second_argument: Box::new(Node::Value(Value::Variable(String::from("x2")))),
+                })),
+            })),
+            variables: vec![String::from("x2")],
+        };
+        let actual_tree = tree.subs(&HashMap::from([("x1", 2.0)]));
+        assert_eq!(expected_tree, actual_tree);
     }
 
     #[test]
@@ -469,53 +448,31 @@ mod tests {
     fn test_tree_without_variables_simplify() {
         let mut tree = create_test_tree_without_variables();
         tree.simplify();
-        match *tree.root {
-            Node::Value(value) => match value {
-                Value::Constant(constant) => {
-                    assert_eq!(2.0_f64 * 3.0_f64 + 5.0_f64.sin() * 10.0_f64, constant)
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        }
+        let expected_tree = ExpressionTree {
+            root: Box::new(Node::Value(Value::Constant(
+                2.0 * 3.0 + 5.0_f64.sin() * 10.0,
+            ))),
+            variables: vec![],
+        };
+        assert_eq!(expected_tree, tree);
     }
 
     #[test]
     fn test_tree_to_simplify_simplify() {
         let mut tree = create_tree_to_simplify();
         tree.simplify();
-        match *tree.root {
-            Node::UnaryOperation(unary_operation) => {
-                match unary_operation.kind {
-                    UnaryOperationKind::Sin => {}
-                    _ => unreachable!(),
-                }
-                match *unary_operation.argument {
-                    Node::BinaryOperation(binary_operation) => {
-                        match binary_operation.kind {
-                            BinaryOperationKind::Addition => {}
-                            _ => unreachable!(),
-                        }
-                        match *binary_operation.first_argument {
-                            Node::Value(value) => match value {
-                                Value::Variable(variable) => assert_eq!("x", variable),
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        }
-                        match *binary_operation.second_argument {
-                            Node::Value(value) => match value {
-                                Value::Constant(constant) => assert_eq!(14.0_f64, constant),
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            _ => unreachable!(),
-        }
+        let expected_tree = ExpressionTree {
+            root: Box::new(Node::UnaryOperation(UnaryOperation {
+                kind: UnaryOperationKind::Sin,
+                argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Addition,
+                    first_argument: Box::new(Node::Value(Value::Variable(String::from("x")))),
+                    second_argument: Box::new(Node::Value(Value::Constant(14.0))),
+                })),
+            })),
+            variables: vec![String::from("x")],
+        };
+        assert_eq!(expected_tree, tree);
     }
 
     fn create_test_tree_with_variables() -> ExpressionTree {
