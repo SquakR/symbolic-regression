@@ -37,7 +37,7 @@ fn perform_lexical_analysis(expression: &str) -> Vec<Token> {
 }
 
 fn recognize_string(string: &str) -> Token {
-    if let Some(function) = try_cast_to_function(string) {
+    if let Some(function) = Function::try_parse(string) {
         return Token::Function(function);
     }
     match string.parse::<f64>() {
@@ -47,50 +47,13 @@ fn recognize_string(string: &str) -> Token {
 }
 
 fn recognize_symbol(c: char) -> Option<Token> {
-    if let Some(operator) = try_cast_to_operator(c) {
+    if let Some(operator) = Operator::try_parse(c) {
         return Some(Token::Operator(operator));
     }
     match c {
         '(' => Some(Token::OpeningBracket),
         ')' => Some(Token::CloseBracket),
         ',' => Some(Token::Comma),
-        _ => None,
-    }
-}
-
-fn try_cast_to_function(string: &str) -> Option<Function> {
-    match string.to_lowercase().as_str() {
-        "ln" => Some(Function::Ln),
-        "exp" => Some(Function::Exp),
-        "sin" => Some(Function::Sin),
-        "arcsin" => Some(Function::Arcsin),
-        "cos" => Some(Function::Cos),
-        "arccos" => Some(Function::Arccos),
-        "tan" => Some(Function::Tan),
-        "arctan" => Some(Function::Arctan),
-        "cot" => Some(Function::Cot),
-        "arccot" => Some(Function::Arccot),
-        "sinh" => Some(Function::Sinh),
-        "arsinh" => Some(Function::Arsinh),
-        "cosh" => Some(Function::Cosh),
-        "arcosh" => Some(Function::Arcosh),
-        "tanh" => Some(Function::Tanh),
-        "artanh" => Some(Function::Artanh),
-        "coth" => Some(Function::Coth),
-        "arcoth" => Some(Function::Arcoth),
-        "sqrt" => Some(Function::Sqrt),
-        "log" => Some(Function::Log),
-        _ => None,
-    }
-}
-
-fn try_cast_to_operator(c: char) -> Option<Operator> {
-    match c {
-        '+' => Some(Operator::Plus),
-        '-' => Some(Operator::Minus),
-        '*' => Some(Operator::Asterisk),
-        '/' => Some(Operator::Slash),
-        '^' => Some(Operator::Circumflex),
         _ => None,
     }
 }
@@ -130,6 +93,34 @@ enum Function {
     Log,
 }
 
+impl Function {
+    fn try_parse(string: &str) -> Option<Function> {
+        match string.to_lowercase().as_str() {
+            "ln" => Some(Function::Ln),
+            "exp" => Some(Function::Exp),
+            "sin" => Some(Function::Sin),
+            "arcsin" => Some(Function::Arcsin),
+            "cos" => Some(Function::Cos),
+            "arccos" => Some(Function::Arccos),
+            "tan" => Some(Function::Tan),
+            "arctan" => Some(Function::Arctan),
+            "cot" => Some(Function::Cot),
+            "arccot" => Some(Function::Arccot),
+            "sinh" => Some(Function::Sinh),
+            "arsinh" => Some(Function::Arsinh),
+            "cosh" => Some(Function::Cosh),
+            "arcosh" => Some(Function::Arcosh),
+            "tanh" => Some(Function::Tanh),
+            "artanh" => Some(Function::Artanh),
+            "coth" => Some(Function::Coth),
+            "arcoth" => Some(Function::Arcoth),
+            "sqrt" => Some(Function::Sqrt),
+            "log" => Some(Function::Log),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 enum Operator {
     Plus,
@@ -147,6 +138,16 @@ impl Operator {
             Operator::Asterisk => 2,
             Operator::Slash => 2,
             Operator::Circumflex => 3,
+        }
+    }
+    fn try_parse(c: char) -> Option<Operator> {
+        match c {
+            '+' => Some(Operator::Plus),
+            '-' => Some(Operator::Minus),
+            '*' => Some(Operator::Asterisk),
+            '/' => Some(Operator::Slash),
+            '^' => Some(Operator::Circumflex),
+            _ => None,
         }
     }
 }
@@ -178,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn test_try_cast_to_operator() {
+    fn test_try_parse_operator() {
         for (c, expected_operator) in [
             ('+', Operator::Plus),
             ('-', Operator::Minus),
@@ -186,7 +187,7 @@ mod tests {
             ('/', Operator::Slash),
             ('^', Operator::Circumflex),
         ] {
-            match try_cast_to_operator(c) {
+            match Operator::try_parse(c) {
                 Some(actual_operator) => assert_eq!(expected_operator, actual_operator),
                 None => panic!(
                     "The character '{}' must be {:?}, but the actual value returned is None.",
@@ -194,7 +195,7 @@ mod tests {
                 ),
             }
         }
-        if let Some(operator) = try_cast_to_operator('w') {
+        if let Some(operator) = Operator::try_parse('w') {
             panic!(
                 "The character 'w' is not an operator, but the actual value returned is {:?}.",
                 operator
@@ -203,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_try_cast_to_function() {
+    fn test_try_parse_function() {
         for (string, expected_function) in [
             ("ln", Function::Ln),
             ("exp", Function::Exp),
@@ -226,7 +227,7 @@ mod tests {
             ("sqrt", Function::Sqrt),
             ("log", Function::Log),
         ] {
-            match try_cast_to_function(string) {
+            match Function::try_parse(string) {
                 Some(actual_function) => assert_eq!(expected_function, actual_function),
                 None => panic!(
                     "The string \"{}\" must be {:?}, but the actual value returned is None.",
@@ -234,14 +235,14 @@ mod tests {
                 ),
             }
         }
-        match try_cast_to_function("SiN") {
+        match Function::try_parse("SiN") {
             Some(actual_function) => assert_eq!(Function::Sin, actual_function),
             None => panic!(
                 "The string \"SiN\" must be {:?}, but the actual value returned is None.",
                 Function::Sin
             ),
         }
-        if let Some(function) = try_cast_to_function("fn") {
+        if let Some(function) = Function::try_parse("fn") {
             panic!(
                 "The string \"fn\" is not a function, but the actual value returned is {:?}.",
                 function
