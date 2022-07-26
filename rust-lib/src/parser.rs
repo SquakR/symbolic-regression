@@ -20,13 +20,13 @@ impl ExpressionTree {
 fn perform_lexical_analysis(expression: &str) -> Vec<Token> {
     let mut tokens = vec![];
     let mut string = String::new();
-    for c in expression.chars() {
+    for (i, c) in expression.chars().enumerate() {
         if c.is_whitespace() {
             continue;
         }
-        if let Some(token) = recognize_symbol(c) {
+        if let Some(token) = recognize_symbol(c, i) {
             if string.len() != 0 {
-                tokens.push(recognize_string(&string));
+                tokens.push(recognize_string(&string, i - string.len()));
                 string = String::new();
             }
             tokens.push(token);
@@ -35,42 +35,69 @@ fn perform_lexical_analysis(expression: &str) -> Vec<Token> {
         }
     }
     if string.len() != 0 {
-        tokens.push(recognize_string(&string));
+        tokens.push(recognize_string(&string, expression.len() - string.len()));
     }
     tokens
 }
 
-fn recognize_string(string: &str) -> Token {
+fn recognize_string(string: &str, position: usize) -> Token {
     if let Some(function) = Function::try_parse(string) {
-        return Token::Function(function);
+        return Token::Function(TokenValue {
+            value: function,
+            position,
+        });
     }
     match string.parse::<f64>() {
-        Ok(constant) => Token::Constant(constant),
-        Err(_) => Token::Variable(string.to_owned()),
+        Ok(constant) => Token::Constant(TokenValue {
+            value: constant,
+            position,
+        }),
+        Err(_) => Token::Variable(TokenValue {
+            value: string.to_owned(),
+            position,
+        }),
     }
 }
 
-fn recognize_symbol(c: char) -> Option<Token> {
+fn recognize_symbol(c: char, position: usize) -> Option<Token> {
     if let Some(operator) = Operator::try_parse(c) {
-        return Some(Token::Operator(operator));
+        return Some(Token::Operator(TokenValue {
+            value: operator,
+            position,
+        }));
     }
     match c {
-        '(' => Some(Token::OpeningBracket),
-        ')' => Some(Token::CloseBracket),
-        ',' => Some(Token::Comma),
+        '(' => Some(Token::OpeningBracket(TokenValue {
+            value: (),
+            position,
+        })),
+        ')' => Some(Token::CloseBracket(TokenValue {
+            value: (),
+            position,
+        })),
+        ',' => Some(Token::Comma(TokenValue {
+            value: (),
+            position,
+        })),
         _ => None,
     }
 }
 
 #[derive(Debug, PartialEq)]
 enum Token {
-    Constant(f64),
-    Variable(String),
-    Function(Function),
-    Operator(Operator),
-    OpeningBracket,
-    CloseBracket,
-    Comma,
+    Constant(TokenValue<f64>),
+    Variable(TokenValue<String>),
+    Function(TokenValue<Function>),
+    Operator(TokenValue<Operator>),
+    OpeningBracket(TokenValue<()>),
+    CloseBracket(TokenValue<()>),
+    Comma(TokenValue<()>),
+}
+
+#[derive(Debug, PartialEq)]
+struct TokenValue<T> {
+    value: T,
+    position: usize,
 }
 
 #[derive(Debug, PartialEq)]
@@ -513,19 +540,41 @@ mod tests {
 
     #[test]
     fn test_recognize_symbol() {
-        match recognize_symbol('+') {
-            Some(token) => assert_eq!(Token::Operator(Operator::Plus), token),
+        let expected_plus = Token::Operator(TokenValue {
+            value: Operator::Plus,
+            position: 5,
+        });
+        match recognize_symbol('+', 5) {
+            Some(token) => assert_eq!(expected_plus, token),
             None => panic!(
-                "The character '+' must bu {:?}, but the actual value returned is None.",
-                Token::Operator(Operator::Plus)
+                "The character '+' must be {:?}, but the actual value returned is None.",
+                expected_plus
             ),
         }
         for (c, expected_token) in [
-            ('(', Token::OpeningBracket),
-            (')', Token::CloseBracket),
-            (',', Token::Comma),
+            (
+                '(',
+                Token::OpeningBracket(TokenValue {
+                    value: (),
+                    position: 5,
+                }),
+            ),
+            (
+                ')',
+                Token::CloseBracket(TokenValue {
+                    value: (),
+                    position: 5,
+                }),
+            ),
+            (
+                ',',
+                Token::Comma(TokenValue {
+                    value: (),
+                    position: 5,
+                }),
+            ),
         ] {
-            match recognize_symbol(c) {
+            match recognize_symbol(c, 5) {
                 Some(actual_token) => assert_eq!(expected_token, actual_token),
                 None => panic!(
                     "The character '{}' must be {:?}, but the actual value returned is None.",
@@ -533,7 +582,7 @@ mod tests {
                 ),
             }
         }
-        if let Some(token) = recognize_symbol('w') {
+        if let Some(token) = recognize_symbol('w', 5) {
             panic!(
                 "The character 'w' is not an token, but the actual value returned is {:?}.",
                 token
@@ -543,28 +592,85 @@ mod tests {
 
     #[test]
     fn test_recognize_string() {
-        assert_eq!(Token::Function(Function::Sin), recognize_string("sin"));
-        assert_eq!(Token::Constant(1.0), recognize_string("1.0"));
-        assert_eq!(Token::Variable(String::from("x1")), recognize_string("x1"));
+        assert_eq!(
+            Token::Function(TokenValue {
+                value: Function::Sin,
+                position: 5
+            }),
+            recognize_string("sin", 5)
+        );
+        assert_eq!(
+            Token::Constant(TokenValue {
+                value: 1.0,
+                position: 5
+            }),
+            recognize_string("1.0", 5)
+        );
+        assert_eq!(
+            Token::Variable(TokenValue {
+                value: String::from("x1"),
+                position: 5
+            }),
+            recognize_string("x1", 5)
+        );
     }
 
     #[test]
     fn test_perform_lexical_analysis() {
         assert_eq!(
             vec![
-                Token::Function(Function::Log),
-                Token::OpeningBracket,
-                Token::Constant(2.0),
-                Token::Comma,
-                Token::Variable(String::from("x")),
-                Token::CloseBracket,
-                Token::Operator(Operator::Plus),
-                Token::Function(Function::Cos),
-                Token::OpeningBracket,
-                Token::Constant(0.0),
-                Token::CloseBracket,
-                Token::Operator(Operator::Minus),
-                Token::Variable(String::from("x")),
+                Token::Function(TokenValue {
+                    value: Function::Log,
+                    position: 0
+                }),
+                Token::OpeningBracket(TokenValue {
+                    value: (),
+                    position: 3
+                }),
+                Token::Constant(TokenValue {
+                    value: 2.0,
+                    position: 4
+                }),
+                Token::Comma(TokenValue {
+                    value: (),
+                    position: 7
+                }),
+                Token::Variable(TokenValue {
+                    value: String::from("x"),
+                    position: 9
+                }),
+                Token::CloseBracket(TokenValue {
+                    value: (),
+                    position: 10
+                }),
+                Token::Operator(TokenValue {
+                    value: Operator::Plus,
+                    position: 12
+                }),
+                Token::Function(TokenValue {
+                    value: Function::Cos,
+                    position: 14
+                }),
+                Token::OpeningBracket(TokenValue {
+                    value: (),
+                    position: 17
+                }),
+                Token::Constant(TokenValue {
+                    value: 0.0,
+                    position: 18
+                }),
+                Token::CloseBracket(TokenValue {
+                    value: (),
+                    position: 21
+                }),
+                Token::Operator(TokenValue {
+                    value: Operator::Minus,
+                    position: 23
+                }),
+                Token::Variable(TokenValue {
+                    value: String::from("x"),
+                    position: 25
+                }),
             ],
             perform_lexical_analysis("log(2.0, x) + cos(0.0) - x")
         );
