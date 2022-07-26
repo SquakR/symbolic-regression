@@ -44,16 +44,19 @@ fn recognize_string(string: &str, position: usize) -> Token {
     if let Some(function) = Function::try_parse(string) {
         return Token::Function(TokenValue {
             value: function,
+            string: string.to_owned(),
             position,
         });
     }
     match string.parse::<f64>() {
         Ok(constant) => Token::Constant(TokenValue {
             value: constant,
+            string: string.to_owned(),
             position,
         }),
         Err(_) => Token::Variable(TokenValue {
             value: string.to_owned(),
+            string: string.to_owned(),
             position,
         }),
     }
@@ -63,20 +66,24 @@ fn recognize_symbol(c: char, position: usize) -> Option<Token> {
     if let Some(operator) = Operator::try_parse(c) {
         return Some(Token::Operator(TokenValue {
             value: operator,
+            string: c.to_string(),
             position,
         }));
     }
     match c {
         '(' => Some(Token::OpeningBracket(TokenValue {
             value: (),
+            string: c.to_string(),
             position,
         })),
         ')' => Some(Token::CloseBracket(TokenValue {
             value: (),
+            string: c.to_string(),
             position,
         })),
         ',' => Some(Token::Comma(TokenValue {
             value: (),
+            string: c.to_string(),
             position,
         })),
         _ => None,
@@ -97,6 +104,7 @@ enum Token {
 #[derive(Debug, PartialEq)]
 struct TokenValue<T> {
     value: T,
+    string: String,
     position: usize,
 }
 
@@ -542,6 +550,7 @@ mod tests {
     fn test_recognize_symbol() {
         let expected_plus = Token::Operator(TokenValue {
             value: Operator::Plus,
+            string: String::from("+"),
             position: 5,
         });
         match recognize_symbol('+', 5) {
@@ -551,29 +560,16 @@ mod tests {
                 expected_plus
             ),
         }
-        for (c, expected_token) in [
-            (
-                '(',
-                Token::OpeningBracket(TokenValue {
-                    value: (),
-                    position: 5,
-                }),
-            ),
-            (
-                ')',
-                Token::CloseBracket(TokenValue {
-                    value: (),
-                    position: 5,
-                }),
-            ),
-            (
-                ',',
-                Token::Comma(TokenValue {
-                    value: (),
-                    position: 5,
-                }),
-            ),
+        for (c, token_factory) in [
+            ('(', Token::OpeningBracket as fn(TokenValue<()>) -> Token),
+            (')', Token::CloseBracket as fn(TokenValue<()>) -> Token),
+            (',', Token::Comma as fn(TokenValue<()>) -> Token),
         ] {
+            let expected_token = token_factory(TokenValue {
+                value: (),
+                string: c.to_string(),
+                position: 5,
+            });
             match recognize_symbol(c, 5) {
                 Some(actual_token) => assert_eq!(expected_token, actual_token),
                 None => panic!(
@@ -595,6 +591,7 @@ mod tests {
         assert_eq!(
             Token::Function(TokenValue {
                 value: Function::Sin,
+                string: String::from("sin"),
                 position: 5
             }),
             recognize_string("sin", 5)
@@ -602,6 +599,7 @@ mod tests {
         assert_eq!(
             Token::Constant(TokenValue {
                 value: 1.0,
+                string: String::from("1.0"),
                 position: 5
             }),
             recognize_string("1.0", 5)
@@ -609,6 +607,7 @@ mod tests {
         assert_eq!(
             Token::Variable(TokenValue {
                 value: String::from("x1"),
+                string: String::from("x1"),
                 position: 5
             }),
             recognize_string("x1", 5)
@@ -621,54 +620,67 @@ mod tests {
             vec![
                 Token::Function(TokenValue {
                     value: Function::Log,
+                    string: String::from("log"),
                     position: 0
                 }),
                 Token::OpeningBracket(TokenValue {
                     value: (),
+                    string: String::from("("),
                     position: 3
                 }),
                 Token::Constant(TokenValue {
                     value: 2.0,
+                    string: String::from("2.0"),
                     position: 4
                 }),
                 Token::Comma(TokenValue {
                     value: (),
+                    string: String::from(","),
                     position: 7
                 }),
                 Token::Variable(TokenValue {
                     value: String::from("x"),
+                    string: String::from("x"),
                     position: 9
                 }),
                 Token::CloseBracket(TokenValue {
                     value: (),
+                    string: String::from(")"),
                     position: 10
                 }),
                 Token::Operator(TokenValue {
                     value: Operator::Plus,
+                    string: String::from("+"),
                     position: 12
                 }),
                 Token::Function(TokenValue {
                     value: Function::Cos,
+                    string: String::from("cos"),
                     position: 14
                 }),
                 Token::OpeningBracket(TokenValue {
                     value: (),
+                    string: String::from("("),
                     position: 17
                 }),
                 Token::Constant(TokenValue {
                     value: 0.0,
+                    string: String::from("0.0"),
                     position: 18
                 }),
                 Token::CloseBracket(TokenValue {
                     value: (),
+                    string: String::from(")"),
                     position: 21
                 }),
                 Token::Operator(TokenValue {
                     value: Operator::Minus,
+                    string: String::from("-"),
                     position: 23
                 }),
                 Token::Variable(TokenValue {
                     value: String::from("x"),
+                    string: String::from("x"),
                     position: 25
                 }),
             ],
