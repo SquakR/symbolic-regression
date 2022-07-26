@@ -1,8 +1,12 @@
 /// Expression tree parser module.
 /// The parser uses the shunting yard algorithm.
 /// https://en.wikipedia.org/wiki/Shunting_yard_algorithm
-use crate::expression_tree::{ExpressionTree, Node, Value};
+use crate::expression_tree::{
+    BinaryOperation, BinaryOperationKind, ExpressionTree, Node, UnaryOperation, UnaryOperationKind,
+    Value,
+};
 use std::cmp::Ordering;
+use std::f64::consts::E;
 
 impl ExpressionTree {
     pub fn parse(expression: &str) -> ExpressionTree {
@@ -71,8 +75,6 @@ enum Token {
 
 #[derive(Debug, PartialEq)]
 enum Function {
-    Ln,
-    Exp,
     Sin,
     Arcsin,
     Cos,
@@ -89,15 +91,15 @@ enum Function {
     Artanh,
     Coth,
     Arcoth,
-    Sqrt,
     Log,
+    Ln,
+    Exp,
+    Sqrt,
 }
 
 impl Function {
     fn try_parse(string: &str) -> Option<Function> {
         match string.to_lowercase().as_str() {
-            "ln" => Some(Function::Ln),
-            "exp" => Some(Function::Exp),
             "sin" => Some(Function::Sin),
             "arcsin" => Some(Function::Arcsin),
             "cos" => Some(Function::Cos),
@@ -114,9 +116,89 @@ impl Function {
             "artanh" => Some(Function::Artanh),
             "coth" => Some(Function::Coth),
             "arcoth" => Some(Function::Arcoth),
-            "sqrt" => Some(Function::Sqrt),
             "log" => Some(Function::Log),
+            "ln" => Some(Function::Ln),
+            "exp" => Some(Function::Exp),
+            "sqrt" => Some(Function::Sqrt),
             _ => None,
+        }
+    }
+    fn to_node(&self, mut arguments: Vec<Node>) -> Result<Node, InvalidArgumentsNumberError> {
+        if let Some(unary_operation_kind) = match self {
+            Function::Sin => Some(UnaryOperationKind::Sin),
+            Function::Arcsin => Some(UnaryOperationKind::Arcsin),
+            Function::Cos => Some(UnaryOperationKind::Cos),
+            Function::Arccos => Some(UnaryOperationKind::Arccos),
+            Function::Tan => Some(UnaryOperationKind::Tan),
+            Function::Arctan => Some(UnaryOperationKind::Arctan),
+            Function::Cot => Some(UnaryOperationKind::Cot),
+            Function::Arccot => Some(UnaryOperationKind::Arccot),
+            Function::Sinh => Some(UnaryOperationKind::Sinh),
+            Function::Arsinh => Some(UnaryOperationKind::Arsinh),
+            Function::Cosh => Some(UnaryOperationKind::Cosh),
+            Function::Arcosh => Some(UnaryOperationKind::Arcosh),
+            Function::Tanh => Some(UnaryOperationKind::Tanh),
+            Function::Artanh => Some(UnaryOperationKind::Artanh),
+            Function::Coth => Some(UnaryOperationKind::Coth),
+            Function::Arcoth => Some(UnaryOperationKind::Arcoth),
+            _ => None,
+        } {
+            if arguments.len() != 1 {
+                return Err(InvalidArgumentsNumberError {
+                    expected: 1,
+                    actual: arguments.len() as u8,
+                });
+            }
+            return Ok(Node::UnaryOperation(UnaryOperation {
+                kind: unary_operation_kind,
+                argument: Box::new(arguments.remove(0)),
+            }));
+        };
+        if let Some(binary_operation_kind) = match self {
+            Function::Ln => Some(BinaryOperationKind::Logarithm),
+            Function::Exp => Some(BinaryOperationKind::Power),
+            _ => None,
+        } {
+            if arguments.len() != 1 {
+                return Err(InvalidArgumentsNumberError {
+                    expected: 1,
+                    actual: arguments.len() as u8,
+                });
+            }
+            return Ok(Node::BinaryOperation(BinaryOperation {
+                kind: binary_operation_kind,
+                first_argument: Box::new(Node::Value(Value::Constant(E))),
+                second_argument: Box::new(arguments.remove(0)),
+            }));
+        }
+        match self {
+            Function::Log => {
+                if arguments.len() != 2 {
+                    return Err(InvalidArgumentsNumberError {
+                        expected: 2,
+                        actual: arguments.len() as u8,
+                    });
+                }
+                return Ok(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Logarithm,
+                    first_argument: Box::new(arguments.remove(0)),
+                    second_argument: Box::new(arguments.remove(0)),
+                }));
+            }
+            Function::Sqrt => {
+                if arguments.len() != 1 {
+                    return Err(InvalidArgumentsNumberError {
+                        expected: 1,
+                        actual: arguments.len() as u8,
+                    });
+                }
+                return Ok(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Power,
+                    first_argument: Box::new(arguments.remove(0)),
+                    second_argument: Box::new(Node::Value(Value::Constant(0.5_f64))),
+                }));
+            }
+            _ => unreachable!(),
         }
     }
 }
@@ -133,10 +215,8 @@ enum Operator {
 impl Operator {
     fn get_precedence(&self) -> u8 {
         match self {
-            Operator::Plus => 1,
-            Operator::Minus => 1,
-            Operator::Asterisk => 2,
-            Operator::Slash => 2,
+            Operator::Plus | Operator::Minus => 1,
+            Operator::Asterisk | Operator::Slash => 2,
             Operator::Circumflex => 3,
         }
     }
@@ -150,6 +230,20 @@ impl Operator {
             _ => None,
         }
     }
+    fn to_node(&self, first_argument: Node, second_argument: Node) -> Node {
+        let binary_operation_kind = match self {
+            Operator::Plus => BinaryOperationKind::Addition,
+            Operator::Minus => BinaryOperationKind::Subtraction,
+            Operator::Asterisk => BinaryOperationKind::Multiplication,
+            Operator::Slash => BinaryOperationKind::Division,
+            Operator::Circumflex => BinaryOperationKind::Power,
+        };
+        Node::BinaryOperation(BinaryOperation {
+            kind: binary_operation_kind,
+            first_argument: Box::new(first_argument),
+            second_argument: Box::new(second_argument),
+        })
+    }
 }
 
 impl Ord for Operator {
@@ -162,6 +256,12 @@ impl PartialOrd for Operator {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct InvalidArgumentsNumberError {
+    expected: u8,
+    actual: u8,
 }
 
 #[cfg(test)]
@@ -179,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn test_try_parse_operator() {
+    fn test_operator_try_parse() {
         for (c, expected_operator) in [
             ('+', Operator::Plus),
             ('-', Operator::Minus),
@@ -204,10 +304,30 @@ mod tests {
     }
 
     #[test]
-    fn test_try_parse_function() {
+    fn test_operator_to_node() {
+        for (operator, expected_binary_operation_kind) in [
+            (Operator::Plus, BinaryOperationKind::Addition),
+            (Operator::Minus, BinaryOperationKind::Subtraction),
+            (Operator::Asterisk, BinaryOperationKind::Multiplication),
+            (Operator::Slash, BinaryOperationKind::Division),
+            (Operator::Circumflex, BinaryOperationKind::Power),
+        ] {
+            let expected_node = Node::BinaryOperation(BinaryOperation {
+                kind: expected_binary_operation_kind,
+                first_argument: Box::new(Node::Value(Value::Constant(1.0))),
+                second_argument: Box::new(Node::Value(Value::Constant(2.0))),
+            });
+            let actual_node = operator.to_node(
+                Node::Value(Value::Constant(1.0)),
+                Node::Value(Value::Constant(2.0)),
+            );
+            assert_eq!(expected_node, actual_node);
+        }
+    }
+
+    #[test]
+    fn test_function_try_parse() {
         for (string, expected_function) in [
-            ("ln", Function::Ln),
-            ("exp", Function::Exp),
             ("sin", Function::Sin),
             ("arcsin", Function::Arcsin),
             ("cos", Function::Cos),
@@ -224,8 +344,10 @@ mod tests {
             ("artanh", Function::Artanh),
             ("coth", Function::Coth),
             ("arcoth", Function::Arcoth),
-            ("sqrt", Function::Sqrt),
             ("log", Function::Log),
+            ("ln", Function::Ln),
+            ("exp", Function::Exp),
+            ("sqrt", Function::Sqrt),
         ] {
             match Function::try_parse(string) {
                 Some(actual_function) => assert_eq!(expected_function, actual_function),
@@ -247,6 +369,145 @@ mod tests {
                 "The string \"fn\" is not a function, but the actual value returned is {:?}.",
                 function
             );
+        }
+    }
+
+    #[test]
+    fn test_function_to_node_main() {
+        for (function, expected_unary_operation_kind) in [
+            (Function::Sin, UnaryOperationKind::Sin),
+            (Function::Arcsin, UnaryOperationKind::Arcsin),
+            (Function::Cos, UnaryOperationKind::Cos),
+            (Function::Arccos, UnaryOperationKind::Arccos),
+            (Function::Tan, UnaryOperationKind::Tan),
+            (Function::Arctan, UnaryOperationKind::Arctan),
+            (Function::Cot, UnaryOperationKind::Cot),
+            (Function::Arccot, UnaryOperationKind::Arccot),
+            (Function::Sinh, UnaryOperationKind::Sinh),
+            (Function::Arsinh, UnaryOperationKind::Arsinh),
+            (Function::Cosh, UnaryOperationKind::Cosh),
+            (Function::Arcosh, UnaryOperationKind::Arcosh),
+            (Function::Tanh, UnaryOperationKind::Tanh),
+            (Function::Artanh, UnaryOperationKind::Artanh),
+            (Function::Coth, UnaryOperationKind::Coth),
+            (Function::Arcoth, UnaryOperationKind::Arcoth),
+        ] {
+            let expected_node = Node::UnaryOperation(UnaryOperation {
+                kind: expected_unary_operation_kind,
+                argument: Box::new(Node::Value(Value::Constant(1.0))),
+            });
+            match function.to_node(vec![Node::Value(Value::Constant(1.0))]) {
+                Ok(node) => assert_eq!(expected_node, node),
+                Err(err) => panic!(
+                    "The node was expected for the {:?} function and one argument, but the actual value returned is {:?}.",
+                    function, err
+                ),
+            }
+            match function.to_node(vec![Node::Value(Value::Constant(1.0)), Node::Value(Value::Constant(2.0))]) {
+                Ok(node) => panic!(
+                    "The error expected for the {:?} function and two arguments, but the actual value returned is {:?}.",
+                    function, node
+                ),
+                Err(err) => assert_eq!(
+                    InvalidArgumentsNumberError {
+                        expected: 1,
+                        actual: 2
+                    },
+                    err
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_function_to_node_ln_exp() {
+        for (function, expected_binary_operation_kind) in [
+            (Function::Ln, BinaryOperationKind::Logarithm),
+            (Function::Exp, BinaryOperationKind::Power),
+        ] {
+            let expected_node = Node::BinaryOperation(BinaryOperation {
+                kind: expected_binary_operation_kind,
+                first_argument: Box::new(Node::Value(Value::Constant(E))),
+                second_argument: Box::new(Node::Value(Value::Constant(1.0))),
+            });
+            match function.to_node(vec![Node::Value(Value::Constant(1.0))]) {
+                Ok(node) => assert_eq!(expected_node, node),
+                Err(err) => panic!(
+                    "The node was expected for the {:?} function and one argument, but the actual value returned is {:?}.",
+                    function, err
+                )
+            }
+            match function.to_node(vec![Node::Value(Value::Constant(1.0)), Node::Value(Value::Constant(2.0))]) {
+                Ok(node) => panic!(
+                    "The error expected for the {:?} function and two arguments, but the actual value returned is {:?}.",
+                    function, node
+                ),
+                Err(err) => assert_eq!(
+                    InvalidArgumentsNumberError {
+                        expected: 1,
+                        actual: 2
+                    },
+                    err
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_function_to_node_log() {
+        let expected_node = Node::BinaryOperation(BinaryOperation {
+            kind: BinaryOperationKind::Logarithm,
+            first_argument: Box::new(Node::Value(Value::Constant(1.0))),
+            second_argument: Box::new(Node::Value(Value::Constant(2.0))),
+        });
+        match Function::Log.to_node(vec![Node::Value(Value::Constant(1.0)), Node::Value(Value::Constant(2.0))]) {
+            Ok(node) => assert_eq!(expected_node, node),
+            Err(err) =>  panic!(
+                "The node was expected for the {:?} function and two arguments, but the actual value returned is {:?}.",
+                Function::Log, err
+            )
+        }
+        match Function::Log.to_node(vec![Node::Value(Value::Constant(1.0))]) {
+            Ok(node) => panic!(
+                "The error expected for the {:?} function and one argument, but the actual value returned is {:?}.",
+                Function::Log, node
+            ),
+            Err(err) => assert_eq!(
+                InvalidArgumentsNumberError {
+                    expected: 2,
+                    actual: 1
+                },
+                err
+            ),
+        }
+    }
+
+    #[test]
+    fn test_function_to_node_sqrt() {
+        let expected_node = Node::BinaryOperation(BinaryOperation {
+            kind: BinaryOperationKind::Power,
+            first_argument: Box::new(Node::Value(Value::Constant(2.0))),
+            second_argument: Box::new(Node::Value(Value::Constant(0.5))),
+        });
+        match Function::Sqrt.to_node(vec![Node::Value(Value::Constant(2.0))]) {
+            Ok(node) => assert_eq!(expected_node, node),
+            Err(err) => panic!(
+                "The node was expected for the {:?} function and one argument, but the actual value returned is {:?}.",
+                Function::Sqrt, err
+            )
+        }
+        match Function::Sqrt.to_node(vec![Node::Value(Value::Constant(1.0)), Node::Value(Value::Constant(2.0))]) {
+            Ok(node) => panic!(
+                "The error expected for the {:?} function and two arguments, but the actual value returned is {:?}.",
+                Function::Sqrt, node
+            ),
+            Err(err) => assert_eq!(
+                InvalidArgumentsNumberError {
+                    expected: 1,
+                    actual: 2
+                },
+                err
+            ),
         }
     }
 
