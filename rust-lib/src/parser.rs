@@ -247,12 +247,35 @@ enum Operator {
     Circumflex,
 }
 
+enum Associativity {
+    Left,
+    Right,
+}
+
 impl Operator {
     fn get_precedence(&self) -> u8 {
         match self {
             Operator::Plus | Operator::Minus => 1,
             Operator::Asterisk | Operator::Slash => 2,
             Operator::Circumflex => 3,
+        }
+    }
+    fn get_associativity(&self) -> Associativity {
+        match self {
+            Operator::Plus | Operator::Minus | Operator::Asterisk | Operator::Slash => {
+                Associativity::Left
+            }
+            Operator::Circumflex => Associativity::Right,
+        }
+    }
+    fn is_computed_before(&self, other: &Operator) -> bool {
+        match self.cmp(other) {
+            Ordering::Equal => match other.get_associativity() {
+                Associativity::Left => true,
+                Associativity::Right => false,
+            },
+            Ordering::Greater => true,
+            Ordering::Less => false,
         }
     }
     fn try_parse(c: char) -> Option<Operator> {
@@ -311,6 +334,14 @@ mod tests {
         assert!(Operator::Slash <= Operator::Asterisk);
         assert!(Operator::Plus < Operator::Asterisk);
         assert!(Operator::Asterisk < Operator::Circumflex);
+    }
+
+    #[test]
+    fn test_operator_is_computed_before() {
+        assert!(Operator::Plus.is_computed_before(&Operator::Plus));
+        assert!(Operator::Plus.is_computed_before(&Operator::Minus));
+        assert!(!Operator::Plus.is_computed_before(&Operator::Asterisk));
+        assert!(Operator::Circumflex.is_computed_before(&Operator::Slash));
     }
 
     #[test]
