@@ -6,15 +6,158 @@ use crate::expression_tree::{
     Value,
 };
 use std::cmp::Ordering;
+use std::collections::{HashSet, VecDeque};
 use std::f64::consts::E;
 
 impl ExpressionTree {
-    pub fn parse(expression: &str) -> ExpressionTree {
-        ExpressionTree {
+    #![allow(unused_must_use)]
+    pub fn parse(expression: &str) -> Result<ExpressionTree, ParseError> {
+        let mut queue = VecDeque::new();
+        let mut variables = HashSet::new();
+        let mut stack = vec![];
+        let tokens = perform_lexical_analysis(expression);
+        for token in &tokens {
+            match token {
+                Token::Constant(_) => {
+                    queue.push_token(token);
+                }
+                Token::Variable(token_value) => {
+                    variables.insert(token_value.value.to_owned());
+                    queue.push_token(token);
+                }
+                Token::Function(_) => stack.push(token),
+                Token::Comma(_) => match queue.shift_while_opening_bracket(&mut stack) {
+                    Err(err) => match err {
+                        NodeQueueError::EmptyStackError(_) => {}
+                        NodeQueueError::InvalidArgumentsNumberError(_) => {}
+                    },
+                    _ => {}
+                },
+                Token::Operator(token_value_o1) => {
+                    if stack.len() > 0 {
+                        loop {
+                            if let Token::Operator(token_value_o2) = &stack[stack.len() - 1] {
+                                if token_value_o2
+                                    .value
+                                    .is_computed_before(&token_value_o1.value)
+                                {
+                                    queue.push_token(stack.pop().unwrap());
+                                } else {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    stack.push(token);
+                }
+                Token::OpeningBracket(_) => stack.push(token),
+                Token::CloseBracket(_) => match queue.shift_while_opening_bracket(&mut stack) {
+                    Err(err) => match err {
+                        NodeQueueError::EmptyStackError(_) => {}
+                        NodeQueueError::InvalidArgumentsNumberError(_) => {}
+                    },
+                    Ok(_) => {
+                        stack.pop();
+                        if stack.len() > 0 {
+                            if let Token::Function(_) = &stack[stack.len() - 1] {
+                                queue.push_token(stack.pop().unwrap());
+                            }
+                        }
+                    }
+                },
+            };
+        }
+        queue.shift_all(&mut stack);
+        Ok(ExpressionTree {
             root: Box::new(Node::Value(Value::Constant(0.0))),
             variables: vec![],
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ParseError {
+    pub message: String,
+}
+
+trait NodeQueue {
+    fn push_token(&mut self, token: &Token) -> Result<(), InvalidArgumentsNumberError>;
+    fn shift_all(&mut self, stack: &mut Vec<&Token>) -> Result<(), InvalidArgumentsNumberError>;
+    fn shift_while_opening_bracket(
+        &mut self,
+        stack: &mut Vec<&Token>,
+    ) -> Result<(), NodeQueueError>;
+}
+
+impl NodeQueue for VecDeque<Node> {
+    fn push_token(&mut self, token: &Token) -> Result<(), InvalidArgumentsNumberError> {
+        match token {
+            Token::Constant(token_value) => {
+                Ok(self.push_front(Node::Value(Value::Constant(token_value.value))))
+            }
+            Token::Variable(token_value) => {
+                Ok(self.push_front(Node::Value(Value::Variable(token_value.value.to_owned()))))
+            }
+            Token::Function(token_value) => {
+                let arguments = self.split_off(0).into_iter().collect::<Vec<Node>>();
+                let node = token_value.value.to_node(arguments)?;
+                Ok(self.push_front(node))
+            }
+            Token::Operator(token_value) => {
+                let mut arguments = self.split_off(0).into_iter().collect::<Vec<Node>>();
+                if arguments.len() != 2 {
+                    return Err(InvalidArgumentsNumberError {
+                        expected: 2,
+                        actual: arguments.len() as u8,
+                    });
+                }
+                let node = token_value
+                    .value
+                    .to_node(arguments.remove(0), arguments.remove(0));
+                Ok(self.push_front(node))
+            }
+            _ => Ok(()),
         }
     }
+    fn shift_all(&mut self, stack: &mut Vec<&Token>) -> Result<(), InvalidArgumentsNumberError> {
+        loop {
+            if stack.len() == 0 {
+                return Ok(());
+            }
+            self.push_token(stack.pop().unwrap())?;
+        }
+    }
+    fn shift_while_opening_bracket(
+        &mut self,
+        stack: &mut Vec<&Token>,
+    ) -> Result<(), NodeQueueError> {
+        let mut tokens = VecDeque::new();
+        loop {
+            if stack.len() == 0 {
+                return Err(NodeQueueError::EmptyStackError(EmptyStackError {}));
+            }
+            if let Token::OpeningBracket(_) = &stack[stack.len() - 1] {
+                break;
+            }
+            tokens.push_back(stack.pop().unwrap());
+        }
+        for token in tokens {
+            if let Err(err) = self.push_token(&token) {
+                return Err(NodeQueueError::InvalidArgumentsNumberError(err));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct EmptyStackError {}
+
+enum NodeQueueError {
+    InvalidArgumentsNumberError(InvalidArgumentsNumberError),
+    EmptyStackError(EmptyStackError),
 }
 
 fn perform_lexical_analysis(expression: &str) -> Vec<Token> {
