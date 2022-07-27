@@ -212,14 +212,14 @@ impl Parser {
         match &*token {
             Token::Constant(token_value) => Ok(self
                 .queue
-                .push_front(Node::Value(Value::Constant(token_value.value)))),
+                .push_back(Node::Value(Value::Constant(token_value.value)))),
             Token::Variable(token_value) => Ok(self
                 .queue
-                .push_front(Node::Value(Value::Variable(token_value.value.to_owned())))),
+                .push_back(Node::Value(Value::Variable(token_value.value.to_owned())))),
             Token::Function(token_value) => {
                 let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
                 match token_value.value.to_node(arguments) {
-                    Ok(node) => Ok(self.queue.push_front(node)),
+                    Ok(node) => Ok(self.queue.push_back(node)),
                     Err(err) => Err(InvalidArgumentsNumberError {
                         token: (&*token).clone(),
                         expected: err.expected,
@@ -239,7 +239,7 @@ impl Parser {
                 let node = token_value
                     .value
                     .to_node(arguments.remove(0), arguments.remove(0));
-                Ok(self.queue.push_front(node))
+                Ok(self.queue.push_back(node))
             }
             _ => Ok(()),
         }
@@ -890,7 +890,7 @@ mod tests {
         }
 
         #[test]
-        fn test_parser_perform_lexical_analysis() {
+        fn test_perform_lexical_analysis() {
             let mut parser = Parser::new("log(2.0, x) + cos(0.0) - x");
             parser.perform_lexical_analysis();
             assert_eq!(
@@ -964,6 +964,44 @@ mod tests {
                 parser.tokens
             );
         }
+    }
+
+    #[test]
+    fn test_push_token() -> Result<(), InvalidArgumentsNumberError> {
+        let mut parser = Parser::new("");
+        parser.push_token(Rc::new(Token::Constant(TokenValue {
+            value: 1.0,
+            string: String::from("1.0"),
+            position: 0,
+        })))?;
+        parser.push_token(Rc::new(Token::Variable(TokenValue {
+            value: String::from("x"),
+            string: String::from("x"),
+            position: 0,
+        })))?;
+        parser.push_token(Rc::new(Token::Operator(TokenValue {
+            value: Operator::Plus,
+            string: String::from("+"),
+            position: 0,
+        })))?;
+        parser.push_token(Rc::new(Token::Function(TokenValue {
+            value: Function::Sin,
+            string: String::from("sin"),
+            position: 0,
+        })))?;
+        assert_eq!(parser.queue.len(), 1);
+        assert_eq!(
+            Node::UnaryOperation(UnaryOperation {
+                kind: UnaryOperationKind::Sin,
+                argument: Box::new(Node::BinaryOperation(BinaryOperation {
+                    kind: BinaryOperationKind::Addition,
+                    first_argument: Box::new(Node::Value(Value::Constant(1.0))),
+                    second_argument: Box::new(Node::Value(Value::Variable(String::from("x"))))
+                }))
+            }),
+            parser.queue.pop_front().unwrap()
+        );
+        Ok(())
     }
 
     #[test]
