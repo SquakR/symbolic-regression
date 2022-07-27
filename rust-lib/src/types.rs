@@ -1,3 +1,4 @@
+/// Module with common types.
 use std::cmp::PartialEq;
 use std::fmt;
 
@@ -7,6 +8,7 @@ pub struct Operator {
     pub precedence: u8,
     pub associativity: Associativity,
     pub complexity: u32,
+    pub io_only: bool,
     pub compute_fn: fn(f64, f64) -> f64,
 }
 
@@ -23,6 +25,7 @@ impl fmt::Debug for Operator {
             .field("precedence", &self.precedence)
             .field("associativity", &self.associativity)
             .field("complexity", &self.complexity)
+            .field("io_only", &self.io_only)
             .finish()
     }
 }
@@ -44,6 +47,7 @@ pub struct Function {
     pub string: String,
     pub arguments_number: usize,
     pub complexity: u32,
+    pub io_only: bool,
     pub compute_fn: fn(&[f64]) -> f64,
 }
 
@@ -67,6 +71,7 @@ impl fmt::Debug for Function {
             .field("string", &self.string)
             .field("arguments_number", &self.arguments_number)
             .field("complexity", &self.complexity)
+            .field("io_only", &self.io_only)
             .finish()
     }
 }
@@ -106,7 +111,7 @@ mod tests {
         fn test_debug() {
             let test_operator = create_test_operator();
             assert_eq!(
-                "Operator { string: \"+\", precedence: 1, associativity: Left, complexity: 1 }",
+                "Operator { string: \"+\", precedence: 1, associativity: Left, complexity: 1, io_only: false }",
                 format!("{:?}", test_operator)
             );
         }
@@ -136,6 +141,7 @@ mod tests {
                 precedence: 1,
                 associativity: Associativity::Left,
                 complexity: 1,
+                io_only: false,
                 compute_fn: |first_argument, second_argument| first_argument + second_argument,
             }
         }
@@ -148,7 +154,7 @@ mod tests {
         fn test_debug() {
             let test_function = create_test_function();
             assert_eq!(
-                "Function { string: \"sin\", arguments_number: 1, complexity: 1 }",
+                "Function { string: \"sin\", arguments_number: 1, complexity: 1, io_only: false }",
                 format!("{:?}", test_function)
             );
         }
@@ -185,6 +191,7 @@ mod tests {
                 string: String::from("sin"),
                 arguments_number: 1,
                 complexity: 1,
+                io_only: false,
                 compute_fn: |arguments| arguments[0].sin(),
             }
         }
