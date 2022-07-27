@@ -2,6 +2,10 @@
 use std::cmp::PartialEq;
 use std::fmt;
 
+pub trait Operation {
+    fn compute(&self, arguments: &[f64]) -> f64;
+}
+
 #[derive(Clone)]
 pub struct Operator {
     pub string: String,
@@ -13,8 +17,8 @@ pub struct Operator {
     pub compute_fn: fn(&[f64]) -> f64,
 }
 
-impl Operator {
-    pub fn compute(&self, arguments: &[f64]) -> f64 {
+impl Operation for Operator {
+    fn compute(&self, arguments: &[f64]) -> f64 {
         if arguments.len() != self.arguments_number {
             panic!(
                 "The function `{}` expected {} arguments but received {}.",
@@ -67,8 +71,8 @@ pub struct Function {
     pub compute_fn: fn(&[f64]) -> f64,
 }
 
-impl Function {
-    pub fn compute(&self, arguments: &[f64]) -> f64 {
+impl Operation for Function {
+    fn compute(&self, arguments: &[f64]) -> f64 {
         if arguments.len() != self.arguments_number {
             panic!(
                 "The function `{}` expected {} arguments but received {}.",
@@ -108,12 +112,6 @@ impl PartialEq<String> for Function {
     fn eq(&self, other: &String) -> bool {
         return self.string.to_lowercase() == other.to_lowercase();
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Value {
-    Variable(String),
-    Constant(f64),
 }
 
 #[derive(Debug, Clone, PartialEq)]
