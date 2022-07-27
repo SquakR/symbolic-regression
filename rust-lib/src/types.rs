@@ -7,14 +7,23 @@ pub struct Operator {
     pub string: String,
     pub precedence: u8,
     pub associativity: Associativity,
+    pub arguments_number: usize,
     pub complexity: u32,
     pub io_only: bool,
-    pub compute_fn: fn(f64, f64) -> f64,
+    pub compute_fn: fn(&[f64]) -> f64,
 }
 
 impl Operator {
-    pub fn compute(&self, first_argument: f64, second_argument: f64) -> f64 {
-        (self.compute_fn)(first_argument, second_argument)
+    pub fn compute(&self, arguments: &[f64]) -> f64 {
+        if arguments.len() != self.arguments_number {
+            panic!(
+                "The function `{}` expected {} arguments but received {}.",
+                self,
+                self.arguments_number,
+                arguments.len()
+            );
+        }
+        (self.compute_fn)(arguments)
     }
 }
 
@@ -22,6 +31,7 @@ impl fmt::Debug for Operator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Operator")
             .field("string", &self.string)
+            .field("arguments_number", &self.arguments_number)
             .field("precedence", &self.precedence)
             .field("associativity", &self.associativity)
             .field("complexity", &self.complexity)
@@ -111,7 +121,7 @@ mod tests {
         fn test_debug() {
             let test_operator = create_test_operator();
             assert_eq!(
-                "Operator { string: \"+\", precedence: 1, associativity: Left, complexity: 1, io_only: false }",
+                "Operator { string: \"+\", arguments_number: 2, precedence: 1, associativity: Left, complexity: 1, io_only: false }",
                 format!("{:?}", test_operator)
             );
         }
@@ -132,17 +142,18 @@ mod tests {
         #[test]
         fn test_compute() {
             let test_operator = create_test_operator();
-            assert_eq!(3.0, test_operator.compute(1.0, 2.0));
+            assert_eq!(3.0, test_operator.compute(&[1.0, 2.0]));
         }
 
         fn create_test_operator() -> Operator {
             Operator {
                 string: String::from("+"),
+                arguments_number: 2,
                 precedence: 1,
                 associativity: Associativity::Left,
                 complexity: 1,
                 io_only: false,
-                compute_fn: |first_argument, second_argument| first_argument + second_argument,
+                compute_fn: |arguments| arguments[0] + arguments[1],
             }
         }
     }
