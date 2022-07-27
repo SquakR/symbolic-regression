@@ -46,6 +46,12 @@ impl fmt::Display for Operator {
     }
 }
 
+impl PartialEq for Operator {
+    fn eq(&self, other: &Operator) -> bool {
+        format!("{:?}", self) == format!("{:?}", other)
+    }
+}
+
 impl PartialEq<String> for Operator {
     fn eq(&self, other: &String) -> bool {
         return self.string.to_lowercase() == other.to_lowercase();
@@ -92,19 +98,25 @@ impl fmt::Display for Function {
     }
 }
 
+impl PartialEq for Function {
+    fn eq(&self, other: &Function) -> bool {
+        format!("{:?}", self) == format!("{:?}", other)
+    }
+}
+
 impl PartialEq<String> for Function {
     fn eq(&self, other: &String) -> bool {
         return self.string.to_lowercase() == other.to_lowercase();
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Variable(String),
     Constant(f64),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Associativity {
     Left,
     Right,
@@ -130,6 +142,15 @@ mod tests {
         fn test_display() {
             let test_operator = create_test_operator();
             assert_eq!("+", format!("{}", test_operator));
+        }
+
+        #[test]
+        fn test_eq() {
+            let test_operator1 = create_test_operator();
+            let mut test_operator2 = create_test_operator();
+            assert!(test_operator1 == test_operator2);
+            test_operator2.string = String::from("-");
+            assert!(test_operator1 != test_operator2);
         }
 
         #[test]
@@ -174,6 +195,15 @@ mod tests {
         fn test_display() {
             let test_function = create_test_function();
             assert_eq!("sin", format!("{}", test_function));
+        }
+
+        #[test]
+        fn test_eq() {
+            let test_function1 = create_test_function();
+            let mut test_function2 = create_test_function();
+            assert!(test_function1 == test_function2);
+            test_function2.string = String::from("cos");
+            assert!(test_function1 != test_function2);
         }
 
         #[test]
