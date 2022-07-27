@@ -8,25 +8,25 @@ use crate::expression_tree::{
 use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
 use std::f64::consts::E;
+use std::rc::Rc;
 
 impl ExpressionTree {
-    #![allow(unused_must_use)]
     pub fn parse(expression: &str) -> Result<ExpressionTree, ParseError> {
         Parser::parse(expression)
     }
 }
 
-struct Parser<'a> {
+struct Parser {
     expression: String,
-    tokens: Vec<Token>,
+    tokens: Vec<Rc<Token>>,
     queue: VecDeque<Node>,
-    stack: Vec<&'a Token>,
+    stack: Vec<Rc<Token>>,
     variables: HashSet<String>,
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
     fn parse(expression: &str) -> Result<ExpressionTree, ParseError> {
-        let parser = Parser::new(expression);
+        let mut parser = Parser::new(expression);
         parser.perform_lexical_analysis();
         parser.handle_tokens()?;
         Ok(ExpressionTree {
@@ -52,19 +52,19 @@ impl<'a> Parser<'a> {
             if let Some(token) = Parser::recognize_symbol(c, i) {
                 if string.len() != 0 {
                     self.tokens
-                        .push(Parser::recognize_string(&string, i - string.len()));
+                        .push(Rc::new(Parser::recognize_string(&string, i - string.len())));
                     string = String::new();
                 }
-                self.tokens.push(token);
+                self.tokens.push(Rc::new(token));
             } else {
                 string.push(c);
             }
         }
         if string.len() != 0 {
-            self.tokens.push(Parser::recognize_string(
+            self.tokens.push(Rc::new(Parser::recognize_string(
                 &string,
                 self.expression.len() - string.len(),
-            ));
+            )));
         }
     }
     fn recognize_string(string: &str, position: usize) -> Token {
@@ -115,14 +115,15 @@ impl<'a> Parser<'a> {
             _ => None,
         }
     }
-    fn handle_tokens(&'a mut self) -> Result<(), ParseError> {
-        for token in &self.tokens {
-            match token {
+    fn handle_tokens(&mut self) -> Result<(), ParseError> {
+        let tokens_rcs = self.tokens.iter().cloned().collect::<Vec<Rc<Token>>>();
+        for token in tokens_rcs {
+            match &*token {
                 Token::Constant(_) => {
                     self.handle_constant(token)?;
                 }
-                Token::Variable(token_value) => {
-                    self.handle_variable(token, token_value)?;
+                Token::Variable(_) => {
+                    self.handle_variable(token)?;
                 }
                 Token::Function(_) => {
                     self.handle_function(token);
@@ -130,53 +131,54 @@ impl<'a> Parser<'a> {
                 Token::Comma(_) => {
                     self.handle_comma(token)?;
                 }
-                Token::Operator(token_value) => {
-                    self.handle_operator(token, token_value)?;
+                Token::Operator(_) => {
+                    self.handle_operator(token)?;
                 }
                 Token::OpeningBracket(_) => {
                     self.handle_opening_bracket(token);
                 }
                 Token::CloseBracket(_) => {
-                    self.handle_close_bracket(token);
+                    self.handle_close_bracket(token)?;
                 }
             }
         }
         self.shift_all()?;
         Ok(())
     }
-    fn handle_constant(&mut self, token: &Token) -> Result<(), ParseError> {
+    fn handle_constant(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         match self.push_token(token) {
             Err(err) => Err(ParseError::InvalidArgumentsNumberError(err)),
             Ok(_) => Ok(()),
         }
     }
-    fn handle_variable(
-        &mut self,
-        token: &Token,
-        token_value: &TokenValue<String>,
-    ) -> Result<(), ParseError> {
-        self.variables.insert(token_value.value.to_owned());
+    fn handle_variable(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
+        let value = match &*token {
+            Token::Variable(token_value) => token_value.value.to_owned(),
+            _ => unreachable!(),
+        };
+        self.variables.insert(value.to_owned());
         match self.push_token(token) {
             Err(err) => Err(ParseError::InvalidArgumentsNumberError(err)),
             Ok(_) => Ok(()),
         }
     }
-    fn handle_function(&'a mut self, token: &'a Token) {
+    fn handle_function(&mut self, token: Rc<Token>) {
         self.stack.push(token);
     }
-    fn handle_comma(&mut self, token: &Token) -> Result<(), ParseError> {
+    fn handle_comma(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         self.shift_while_opening_bracket(token)
     }
-    fn handle_operator(
-        &'a mut self,
-        token: &'a Token,
-        token_value: &TokenValue<Operator>,
-    ) -> Result<(), ParseError> {
+    fn handle_operator(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
+        let value = match &*token {
+            Token::Operator(token_value) => token_value.value.to_owned(),
+            _ => unreachable!(),
+        };
         if self.stack.len() > 0 {
             loop {
-                if let Token::Operator(token_value_o2) = &self.stack[self.stack.len() - 1] {
-                    if token_value_o2.value.is_computed_before(&token_value.value) {
-                        if let Err(err) = self.push_token(self.stack.pop().unwrap()) {
+                if let Token::Operator(token_value_o2) = &*self.stack[self.stack.len() - 1] {
+                    if token_value_o2.value.is_computed_before(&value) {
+                        let last_token = self.stack.pop().unwrap();
+                        if let Err(err) = self.push_token(last_token) {
                             return Err(ParseError::InvalidArgumentsNumberError(err));
                         }
                     } else {
@@ -190,23 +192,24 @@ impl<'a> Parser<'a> {
         self.stack.push(token);
         Ok(())
     }
-    fn handle_opening_bracket(&'a mut self, token: &'a Token) {
+    fn handle_opening_bracket(&mut self, token: Rc<Token>) {
         self.stack.push(token);
     }
-    fn handle_close_bracket(&mut self, token: &Token) -> Result<(), ParseError> {
+    fn handle_close_bracket(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         self.shift_while_opening_bracket(token)?;
         self.stack.pop();
         if self.stack.len() > 0 {
-            if let Token::Function(_) = &self.stack[self.stack.len() - 1] {
-                if let Err(err) = self.push_token(self.stack.pop().unwrap()) {
+            if let Token::Function(_) = &*self.stack[self.stack.len() - 1] {
+                let last_token = self.stack.pop().unwrap();
+                if let Err(err) = self.push_token(last_token) {
                     return Err(ParseError::InvalidArgumentsNumberError(err));
                 }
             }
         }
         Ok(())
     }
-    fn push_token(&mut self, token: &Token) -> Result<(), InvalidArgumentsNumberError> {
-        match token {
+    fn push_token(&mut self, token: Rc<Token>) -> Result<(), InvalidArgumentsNumberError> {
+        match &*token {
             Token::Constant(token_value) => Ok(self
                 .queue
                 .push_front(Node::Value(Value::Constant(token_value.value)))),
@@ -218,7 +221,7 @@ impl<'a> Parser<'a> {
                 match token_value.value.to_node(arguments) {
                     Ok(node) => Ok(self.queue.push_front(node)),
                     Err(err) => Err(InvalidArgumentsNumberError {
-                        token: token.clone(),
+                        token: (&*token).clone(),
                         expected: err.expected,
                         actual: err.actual,
                     }),
@@ -228,7 +231,7 @@ impl<'a> Parser<'a> {
                 let mut arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
                 if arguments.len() != 2 {
                     return Err(InvalidArgumentsNumberError {
-                        token: token.clone(),
+                        token: (&*token).clone(),
                         expected: 2,
                         actual: arguments.len() as u8,
                     });
@@ -241,35 +244,35 @@ impl<'a> Parser<'a> {
             _ => Ok(()),
         }
     }
-    fn shift_while_opening_bracket(&mut self, token: &Token) -> Result<(), ParseError> {
+    fn shift_while_opening_bracket(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         let mut tokens = VecDeque::new();
         loop {
             if self.stack.len() == 0 {
-                match token {
+                match *token {
                     Token::Comma(_) => {
                         return Err(ParseError::MissingCommaOrOpeningParenthesisError(
                             MissingCommaOrOpeningParenthesisError {
-                                token: token.clone(),
+                                token: (&*token).clone(),
                             },
                         ))
                     }
                     Token::CloseBracket(_) => {
                         return Err(ParseError::MissionCommaError({
                             MissionCommaError {
-                                token: token.clone(),
+                                token: (&*token).clone(),
                             }
                         }))
                     }
                     _ => unreachable!(),
                 }
             }
-            if let Token::OpeningBracket(_) = self.stack[self.stack.len() - 1] {
+            if let Token::OpeningBracket(_) = *self.stack[self.stack.len() - 1] {
                 break;
             }
             tokens.push_back(self.stack.pop().unwrap());
         }
         for token in tokens {
-            if let Err(err) = self.push_token(&token) {
+            if let Err(err) = self.push_token(token) {
                 return Err(ParseError::InvalidArgumentsNumberError(err));
             }
         }
@@ -280,12 +283,13 @@ impl<'a> Parser<'a> {
             if self.stack.len() == 0 {
                 return Ok(());
             }
-            if let Token::OpeningBracket(_) = self.stack[self.stack.len() - 1] {
+            if let Token::OpeningBracket(_) = *self.stack[self.stack.len() - 1] {
                 return Err(ParseError::MissionCommaError(MissionCommaError {
-                    token: self.stack[self.stack.len() - 1].clone(),
+                    token: (&*self.stack[self.stack.len() - 1]).clone(),
                 }));
             }
-            if let Err(err) = self.push_token(self.stack.pop().unwrap()) {
+            let last_token = self.stack.pop().unwrap();
+            if let Err(err) = self.push_token(last_token) {
                 return Err(ParseError::InvalidArgumentsNumberError(err));
             }
         }
@@ -300,17 +304,17 @@ pub enum ParseError {
 }
 
 #[derive(Debug)]
-struct MissingCommaOrOpeningParenthesisError {
+pub struct MissingCommaOrOpeningParenthesisError {
     token: Token,
 }
 
 #[derive(Debug)]
-struct MissionCommaError {
+pub struct MissionCommaError {
     token: Token,
 }
 
 #[derive(Debug)]
-struct InvalidArgumentsNumberError {
+pub struct InvalidArgumentsNumberError {
     token: Token,
     expected: u8,
     actual: u8,
@@ -711,7 +715,7 @@ mod tests {
                     function, node
                 ),
                 Err(err) => assert_eq!(
-                    InvalidArgumentsNumberError {
+                    InternalInvalidArgumentsNumberError {
                         expected: 1,
                         actual: 2
                     },
@@ -745,7 +749,7 @@ mod tests {
                     function, node
                 ),
                 Err(err) => assert_eq!(
-                    InvalidArgumentsNumberError {
+                    InternalInvalidArgumentsNumberError {
                         expected: 1,
                         actual: 2
                     },
@@ -775,7 +779,7 @@ mod tests {
                 Function::Log, node
             ),
             Err(err) => assert_eq!(
-                InvalidArgumentsNumberError {
+                InternalInvalidArgumentsNumberError {
                     expected: 2,
                     actual: 1
                 },
@@ -804,7 +808,7 @@ mod tests {
                 Function::Sqrt, node
             ),
             Err(err) => assert_eq!(
-                InvalidArgumentsNumberError {
+                InternalInvalidArgumentsNumberError {
                     expected: 1,
                     actual: 2
                 },
@@ -824,7 +828,7 @@ mod tests {
                 string: String::from("+"),
                 position: 5,
             });
-            match recognize_symbol('+', 5) {
+            match Parser::recognize_symbol('+', 5) {
                 Some(token) => assert_eq!(expected_plus, token),
                 None => panic!(
                     "The character '+' must be {:?}, but the actual value returned is None.",
@@ -841,7 +845,7 @@ mod tests {
                     string: c.to_string(),
                     position: 5,
                 });
-                match recognize_symbol(c, 5) {
+                match Parser::recognize_symbol(c, 5) {
                     Some(actual_token) => assert_eq!(expected_token, actual_token),
                     None => panic!(
                         "The character '{}' must be {:?}, but the actual value returned is None.",
@@ -849,7 +853,7 @@ mod tests {
                     ),
                 }
             }
-            if let Some(token) = recognize_symbol('w', 5) {
+            if let Some(token) = Parser::recognize_symbol('w', 5) {
                 panic!(
                     "The character 'w' is not an token, but the actual value returned is {:?}.",
                     token
@@ -865,7 +869,7 @@ mod tests {
                     string: String::from("sin"),
                     position: 5
                 }),
-                recognize_string("sin", 5)
+                Parser::recognize_string("sin", 5)
             );
             assert_eq!(
                 Token::Constant(TokenValue {
@@ -873,7 +877,7 @@ mod tests {
                     string: String::from("1.0"),
                     position: 5
                 }),
-                recognize_string("1.0", 5)
+                Parser::recognize_string("1.0", 5)
             );
             assert_eq!(
                 Token::Variable(TokenValue {
@@ -881,81 +885,83 @@ mod tests {
                     string: String::from("x1"),
                     position: 5
                 }),
-                recognize_string("x1", 5)
+                Parser::recognize_string("x1", 5)
             );
         }
 
         #[test]
         fn test_parser_perform_lexical_analysis() {
+            let mut parser = Parser::new("log(2.0, x) + cos(0.0) - x");
+            parser.perform_lexical_analysis();
             assert_eq!(
                 vec![
-                    Token::Function(TokenValue {
+                    Rc::new(Token::Function(TokenValue {
                         value: Function::Log,
                         string: String::from("log"),
                         position: 0
-                    }),
-                    Token::OpeningBracket(TokenValue {
+                    })),
+                    Rc::new(Token::OpeningBracket(TokenValue {
                         value: (),
                         string: String::from("("),
                         position: 3
-                    }),
-                    Token::Constant(TokenValue {
+                    })),
+                    Rc::new(Token::Constant(TokenValue {
                         value: 2.0,
                         string: String::from("2.0"),
                         position: 4
-                    }),
-                    Token::Comma(TokenValue {
+                    })),
+                    Rc::new(Token::Comma(TokenValue {
                         value: (),
                         string: String::from(","),
                         position: 7
-                    }),
-                    Token::Variable(TokenValue {
+                    })),
+                    Rc::new(Token::Variable(TokenValue {
                         value: String::from("x"),
                         string: String::from("x"),
                         position: 9
-                    }),
-                    Token::CloseBracket(TokenValue {
+                    })),
+                    Rc::new(Token::CloseBracket(TokenValue {
                         value: (),
                         string: String::from(")"),
                         position: 10
-                    }),
-                    Token::Operator(TokenValue {
+                    })),
+                    Rc::new(Token::Operator(TokenValue {
                         value: Operator::Plus,
                         string: String::from("+"),
                         position: 12
-                    }),
-                    Token::Function(TokenValue {
+                    })),
+                    Rc::new(Token::Function(TokenValue {
                         value: Function::Cos,
                         string: String::from("cos"),
                         position: 14
-                    }),
-                    Token::OpeningBracket(TokenValue {
+                    })),
+                    Rc::new(Token::OpeningBracket(TokenValue {
                         value: (),
                         string: String::from("("),
                         position: 17
-                    }),
-                    Token::Constant(TokenValue {
+                    })),
+                    Rc::new(Token::Constant(TokenValue {
                         value: 0.0,
                         string: String::from("0.0"),
                         position: 18
-                    }),
-                    Token::CloseBracket(TokenValue {
+                    })),
+                    Rc::new(Token::CloseBracket(TokenValue {
                         value: (),
                         string: String::from(")"),
                         position: 21
-                    }),
-                    Token::Operator(TokenValue {
+                    })),
+                    Rc::new(Token::Operator(TokenValue {
                         value: Operator::Minus,
                         string: String::from("-"),
                         position: 23
-                    }),
-                    Token::Variable(TokenValue {
+                    })),
+                    Rc::new(Token::Variable(TokenValue {
                         value: String::from("x"),
                         string: String::from("x"),
                         position: 25
-                    }),
+                    })),
                 ],
-                Parser::perform_lexical_analysis("log(2.0, x) + cos(0.0) - x")
+                parser.tokens
             );
         }
     }
