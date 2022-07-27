@@ -1,7 +1,7 @@
 /// Expression tree parser module.
 /// The parser uses the shunting yard algorithm.
 /// https://en.wikipedia.org/wiki/Shunting_yard_algorithm
-use crate::expression_tree::{
+use crate::_expression_tree::{
     BinaryOperation, BinaryOperationKind, ExpressionTree, Node, UnaryOperation, UnaryOperationKind,
     Value,
 };
