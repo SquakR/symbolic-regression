@@ -8,7 +8,7 @@ pub trait Operation {
 
 #[derive(Clone)]
 pub struct Operator {
-    pub string: String,
+    pub name: String,
     pub precedence: u8,
     pub associativity: Associativity,
     pub arguments_number: usize,
@@ -34,7 +34,7 @@ impl Operation for Operator {
 impl fmt::Debug for Operator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Operator")
-            .field("string", &self.string)
+            .field("name", &self.name)
             .field("arguments_number", &self.arguments_number)
             .field("precedence", &self.precedence)
             .field("associativity", &self.associativity)
@@ -46,7 +46,7 @@ impl fmt::Debug for Operator {
 
 impl fmt::Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.string)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -58,13 +58,13 @@ impl PartialEq for Operator {
 
 impl PartialEq<String> for Operator {
     fn eq(&self, other: &String) -> bool {
-        return self.string.to_lowercase() == other.to_lowercase();
+        return self.name.to_lowercase() == other.to_lowercase();
     }
 }
 
 #[derive(Clone)]
 pub struct Function {
-    pub string: String,
+    pub name: String,
     pub arguments_number: usize,
     pub complexity: u32,
     pub io_only: bool,
@@ -88,7 +88,7 @@ impl Operation for Function {
 impl fmt::Debug for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Function")
-            .field("string", &self.string)
+            .field("name", &self.name)
             .field("arguments_number", &self.arguments_number)
             .field("complexity", &self.complexity)
             .field("io_only", &self.io_only)
@@ -98,7 +98,7 @@ impl fmt::Debug for Function {
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.string)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -110,7 +110,7 @@ impl PartialEq for Function {
 
 impl PartialEq<String> for Function {
     fn eq(&self, other: &String) -> bool {
-        return self.string.to_lowercase() == other.to_lowercase();
+        return self.name.to_lowercase() == other.to_lowercase();
     }
 }
 
@@ -131,7 +131,7 @@ mod tests {
         fn test_debug() {
             let test_operator = create_test_operator();
             assert_eq!(
-                "Operator { string: \"+\", arguments_number: 2, precedence: 1, associativity: Left, complexity: 1, io_only: false }",
+                "Operator { name: \"+\", arguments_number: 2, precedence: 1, associativity: Left, complexity: 1, io_only: false }",
                 format!("{:?}", test_operator)
             );
         }
@@ -147,7 +147,7 @@ mod tests {
             let test_operator1 = create_test_operator();
             let mut test_operator2 = create_test_operator();
             assert!(test_operator1 == test_operator2);
-            test_operator2.string = String::from("-");
+            test_operator2.name = String::from("-");
             assert!(test_operator1 != test_operator2);
         }
 
@@ -166,7 +166,7 @@ mod tests {
 
         fn create_test_operator() -> Operator {
             Operator {
-                string: String::from("+"),
+                name: String::from("+"),
                 arguments_number: 2,
                 precedence: 1,
                 associativity: Associativity::Left,
@@ -184,7 +184,7 @@ mod tests {
         fn test_debug() {
             let test_function = create_test_function();
             assert_eq!(
-                "Function { string: \"sin\", arguments_number: 1, complexity: 1, io_only: false }",
+                "Function { name: \"sin\", arguments_number: 1, complexity: 1, io_only: false }",
                 format!("{:?}", test_function)
             );
         }
@@ -200,7 +200,7 @@ mod tests {
             let test_function1 = create_test_function();
             let mut test_function2 = create_test_function();
             assert!(test_function1 == test_function2);
-            test_function2.string = String::from("cos");
+            test_function2.name = String::from("cos");
             assert!(test_function1 != test_function2);
         }
 
@@ -227,7 +227,7 @@ mod tests {
 
         fn create_test_function() -> Function {
             Function {
-                string: String::from("sin"),
+                name: String::from("sin"),
                 arguments_number: 1,
                 complexity: 1,
                 io_only: false,
