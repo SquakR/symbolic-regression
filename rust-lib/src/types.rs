@@ -4,6 +4,7 @@ use std::fmt;
 
 pub trait Operation {
     fn compute(&self, arguments: &[f64]) -> f64;
+    fn get_name(&self) -> &str;
 }
 
 #[derive(Clone)]
@@ -28,6 +29,9 @@ impl Operation for Operator {
             );
         }
         (self.compute_fn)(arguments)
+    }
+    fn get_name(&self) -> &str {
+        self.name.as_str()
     }
 }
 
@@ -56,12 +60,6 @@ impl PartialEq for Operator {
     }
 }
 
-impl PartialEq<String> for Operator {
-    fn eq(&self, other: &String) -> bool {
-        return self.name.to_lowercase() == other.to_lowercase();
-    }
-}
-
 #[derive(Clone)]
 pub struct Function {
     pub name: String,
@@ -82,6 +80,9 @@ impl Operation for Function {
             );
         }
         (self.compute_fn)(arguments)
+    }
+    fn get_name(&self) -> &str {
+        self.name.as_str()
     }
 }
 
@@ -105,12 +106,6 @@ impl fmt::Display for Function {
 impl PartialEq for Function {
     fn eq(&self, other: &Function) -> bool {
         format!("{:?}", self) == format!("{:?}", other)
-    }
-}
-
-impl PartialEq<String> for Function {
-    fn eq(&self, other: &String) -> bool {
-        return self.name.to_lowercase() == other.to_lowercase();
     }
 }
 
@@ -149,13 +144,6 @@ mod tests {
             assert!(test_operator1 == test_operator2);
             test_operator2.name = String::from("-");
             assert!(test_operator1 != test_operator2);
-        }
-
-        #[test]
-        fn test_str_eq() {
-            let test_operator = create_test_operator();
-            assert!(test_operator == String::from("+"));
-            assert!(test_operator != String::from("-"));
         }
 
         #[test]
@@ -202,14 +190,6 @@ mod tests {
             assert!(test_function1 == test_function2);
             test_function2.name = String::from("cos");
             assert!(test_function1 != test_function2);
-        }
-
-        #[test]
-        fn test_str_eq() {
-            let test_function = create_test_function();
-            assert!(test_function == String::from("sin"));
-            assert!(test_function == String::from("SiN"));
-            assert!(test_function != String::from("cos"));
         }
 
         #[test]

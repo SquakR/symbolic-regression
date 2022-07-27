@@ -1,10 +1,25 @@
 /// Module with model settings.
-use crate::types::{Associativity, Function, Operator};
+use crate::types::{Associativity, Function, Operation, Operator};
 use std::f64::{consts::PI, NAN};
 
 pub struct Settings {
     pub operators: Vec<Operator>,
     pub functions: Vec<Function>,
+}
+
+pub trait OperationCollection<T: Operation + Clone> {
+    fn find_by_name(&self, name: &str) -> Option<T>;
+}
+
+impl<T: Operation + Clone> OperationCollection<T> for Vec<T> {
+    fn find_by_name(&self, name: &str) -> Option<T> {
+        for operation in self {
+            if operation.get_name() == name {
+                return Some((*operation).clone());
+            }
+        }
+        None
+    }
 }
 
 pub fn get_default_settings() -> Settings {
@@ -213,5 +228,30 @@ pub fn get_default_settings() -> Settings {
                 compute_fn: |arguments| arguments[0].sqrt(),
             },
         ],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_operator_by_name() {
+        let settings = get_default_settings();
+        assert_eq!(
+            settings.functions[0],
+            settings.functions.find_by_name("log").unwrap()
+        );
+        assert_eq!(None, settings.functions.find_by_name("fn"));
+    }
+
+    #[test]
+    fn test_find_function_by_name() {
+        let settings = get_default_settings();
+        assert_eq!(
+            settings.operators[0],
+            settings.operators.find_by_name("+").unwrap()
+        );
+        assert_eq!(None, settings.operators.find_by_name("&"));
     }
 }
