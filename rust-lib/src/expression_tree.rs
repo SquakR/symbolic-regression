@@ -117,8 +117,8 @@ impl<'a> Computable for Node<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct OperationNode<'a, T: Operation> {
-    operation: &'a T,
-    arguments: Vec<Node<'a>>,
+    pub operation: &'a T,
+    pub arguments: Vec<Node<'a>>,
 }
 
 impl<'a, T: Operation> Computable for OperationNode<'a, T> {
@@ -150,8 +150,8 @@ impl<'a, T: Operation> Computable for OperationNode<'a, T> {
 
 #[derive(Debug, PartialEq)]
 pub struct FunctionNode<'a> {
-    function: Function,
-    arguments: Vec<Node<'a>>,
+    pub function: Function,
+    pub arguments: Vec<Node<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

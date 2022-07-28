@@ -1,7 +1,7 @@
 //! Expression tree parser module.
 //! The parser uses the shunting yard algorithm.
 //! https://en.wikipedia.org/wiki/Shunting_yard_algorithm
-use crate::expression_tree::{ExpressionTree, Node, ValueNode};
+use crate::expression_tree::{ExpressionTree, Node, OperationNode, ValueNode};
 use crate::settings::{OperationCollection, Settings};
 use crate::types::{Associativity, Function, Operator};
 use std::cmp::Ordering;
@@ -31,10 +31,18 @@ impl<'a> Parser<'a> {
         expression: &str,
         settings: &'a Settings,
     ) -> Result<ExpressionTree<'a>, ParseError<'a>> {
+        if expression.len() == 0 {
+            return Err(ParseError::EmptyFormulaError(EmptyFormulaError {}));
+        }
         let mut parser = Parser::new(expression, settings);
+        parser.perform_lexical_analysis();
+        parser.handle_tokens()?;
+        if parser.queue.len() != 1 {
+            return Err(ParseError::MultipleFormulaError(MultipleFormulaError {}));
+        }
         Ok(ExpressionTree {
-            root: Node::Value(ValueNode::Constant(0.0)),
-            variables: vec![],
+            root: parser.queue.pop_front().unwrap(),
+            variables: parser.variables.iter().cloned().collect::<Vec<String>>(),
         })
     }
     fn new(expression: &str, settings: &'a Settings) -> Parser<'a> {
@@ -135,12 +143,198 @@ impl<'a> Parser<'a> {
             _ => None,
         }
     }
+    fn handle_tokens(&mut self) -> Result<(), ParseError<'a>> {
+        let tokens_rcs = self.tokens.iter().cloned().collect::<Vec<Rc<Token>>>();
+        for token in tokens_rcs {
+            match &*token {
+                Token::Constant(_) => {
+                    self.handle_constant(token)?;
+                }
+                Token::Variable(_) => {
+                    self.handle_variable(token)?;
+                }
+                Token::Function(_) => {
+                    self.handle_function(token);
+                }
+                Token::Comma(_) => {
+                    self.handle_comma(token)?;
+                }
+                Token::Operator(_) => {
+                    self.handle_operator(token)?;
+                }
+                Token::OpeningBracket(_) => {
+                    self.handle_opening_bracket(token);
+                }
+                Token::CloseBracket(_) => {
+                    self.handle_close_bracket(token)?;
+                }
+            }
+        }
+        self.shift_all()?;
+        Ok(())
+    }
+    fn handle_constant(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+        match self.push_token(token) {
+            Err(err) => Err(ParseError::InvalidArgumentsNumberError(err)),
+            Ok(_) => Ok(()),
+        }
+    }
+    fn handle_variable(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+        let value = match &*token {
+            Token::Variable(token_value) => token_value.value.to_owned(),
+            _ => unreachable!(),
+        };
+        self.variables.insert(value.to_owned());
+        match self.push_token(token) {
+            Err(err) => Err(ParseError::InvalidArgumentsNumberError(err)),
+            Ok(_) => Ok(()),
+        }
+    }
+    fn handle_function(&mut self, token: Rc<Token<'a>>) {
+        self.stack.push(token);
+    }
+    fn handle_comma(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+        self.shift_while_opening_bracket(token)
+    }
+    fn handle_operator(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+        let value = match &*token {
+            Token::Operator(token_value) => token_value.value.to_owned(),
+            _ => unreachable!(),
+        };
+        if self.stack.len() > 0 {
+            loop {
+                if let Token::Operator(token_value_o2) = &*self.stack[self.stack.len() - 1] {
+                    if token_value_o2.value.is_computed_before(&value) {
+                        let last_token = self.stack.pop().unwrap();
+                        if let Err(err) = self.push_token(last_token) {
+                            return Err(ParseError::InvalidArgumentsNumberError(err));
+                        }
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        self.stack.push(token);
+        Ok(())
+    }
+    fn handle_opening_bracket(&mut self, token: Rc<Token<'a>>) {
+        self.stack.push(token);
+    }
+    fn handle_close_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+        self.shift_while_opening_bracket(token)?;
+        self.stack.pop();
+        if self.stack.len() > 0 {
+            if let Token::Function(_) = &*self.stack[self.stack.len() - 1] {
+                let last_token = self.stack.pop().unwrap();
+                if let Err(err) = self.push_token(last_token) {
+                    return Err(ParseError::InvalidArgumentsNumberError(err));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn push_token(&mut self, token: Rc<Token<'a>>) -> Result<(), InvalidArgumentsNumberError<'a>> {
+        match &*token {
+            Token::Constant(token_value) => Ok(self
+                .queue
+                .push_back(Node::Value(ValueNode::Constant(token_value.value)))),
+            Token::Variable(token_value) => Ok(self.queue.push_back(Node::Value(
+                ValueNode::Variable(token_value.value.to_owned()),
+            ))),
+            Token::Function(token_value) => {
+                let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
+                if arguments.len() != token_value.value.arguments_number {
+                    return Err(InvalidArgumentsNumberError {
+                        token: (&*token).clone(),
+                        expected: token_value.value.arguments_number,
+                        actual: arguments.len(),
+                    });
+                }
+                let node = Node::Function(OperationNode {
+                    operation: token_value.value,
+                    arguments,
+                });
+                Ok(self.queue.push_back(node))
+            }
+            Token::Operator(token_value) => {
+                let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
+                if arguments.len() != token_value.value.arguments_number {
+                    return Err(InvalidArgumentsNumberError {
+                        token: (&*token).clone(),
+                        expected: token_value.value.arguments_number,
+                        actual: arguments.len(),
+                    });
+                }
+                let node = Node::Operator(OperationNode {
+                    operation: token_value.value,
+                    arguments,
+                });
+                Ok(self.queue.push_back(node))
+            }
+            _ => Ok(()),
+        }
+    }
+    fn shift_while_opening_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+        let mut tokens = VecDeque::new();
+        loop {
+            if self.stack.len() == 0 {
+                match *token {
+                    Token::Comma(_) => {
+                        return Err(ParseError::MissingCommaOrOpeningParenthesisError(
+                            MissingCommaOrOpeningParenthesisError {
+                                token: (&*token).clone(),
+                            },
+                        ))
+                    }
+                    Token::CloseBracket(_) => {
+                        return Err(ParseError::MissionCommaError({
+                            MissionCommaError {
+                                token: (&*token).clone(),
+                            }
+                        }))
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            if let Token::OpeningBracket(_) = *self.stack[self.stack.len() - 1] {
+                break;
+            }
+            tokens.push_back(self.stack.pop().unwrap());
+        }
+        for token in tokens {
+            if let Err(err) = self.push_token(token) {
+                return Err(ParseError::InvalidArgumentsNumberError(err));
+            }
+        }
+        Ok(())
+    }
+    fn shift_all(&mut self) -> Result<(), ParseError<'a>> {
+        loop {
+            if self.stack.len() == 0 {
+                return Ok(());
+            }
+            if let Token::OpeningBracket(_) = *self.stack[self.stack.len() - 1] {
+                return Err(ParseError::MissionCommaError(MissionCommaError {
+                    token: (&*self.stack[self.stack.len() - 1]).clone(),
+                }));
+            }
+            let last_token = self.stack.pop().unwrap();
+            if let Err(err) = self.push_token(last_token) {
+                return Err(ParseError::InvalidArgumentsNumberError(err));
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum ParseError<'a> {
     MissingCommaOrOpeningParenthesisError(MissingCommaOrOpeningParenthesisError<'a>),
     MissionCommaError(MissionCommaError<'a>),
+    EmptyFormulaError(EmptyFormulaError),
+    MultipleFormulaError(MultipleFormulaError),
     InvalidArgumentsNumberError(InvalidArgumentsNumberError<'a>),
 }
 
@@ -155,10 +349,16 @@ pub struct MissionCommaError<'a> {
 }
 
 #[derive(Debug)]
+pub struct EmptyFormulaError;
+
+#[derive(Debug)]
+pub struct MultipleFormulaError;
+
+#[derive(Debug)]
 pub struct InvalidArgumentsNumberError<'a> {
     token: Token<'a>,
-    expected: u8,
-    actual: u8,
+    expected: usize,
+    actual: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -179,7 +379,7 @@ struct TokenValue<T> {
     position: usize,
 }
 
-impl Operator {
+impl<'a> Operator {
     fn is_computed_before(&self, other: &Operator) -> bool {
         match self.precedence.cmp(&other.precedence) {
             Ordering::Equal => match other.associativity {
