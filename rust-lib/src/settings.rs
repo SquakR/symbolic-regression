@@ -82,6 +82,13 @@ pub fn get_default_settings() -> Settings {
         ],
         functions: vec![
             Function {
+                name: String::from("abs"),
+                arguments_number: 1,
+                complexity: 3,
+                io_only: false,
+                compute_fn: |arguments| arguments[0].abs(),
+            },
+            Function {
                 name: String::from("log"),
                 arguments_number: 2,
                 complexity: 4,
