@@ -1,4 +1,4 @@
-/// Expression tree core functionality module.
+//! Expression tree core functionality module.
 use crate::types::{Function, Operation, Operator};
 use std::collections::HashMap;
 

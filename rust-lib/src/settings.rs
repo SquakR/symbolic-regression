@@ -1,4 +1,4 @@
-/// Module with model settings.
+//! Module with model settings.
 use crate::types::{Associativity, Function, Operation, Operator};
 use std::f64::{consts::PI, NAN};
 

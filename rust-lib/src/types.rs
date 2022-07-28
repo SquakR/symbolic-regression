@@ -1,4 +1,4 @@
-/// Module with common types.
+//! Module with common types.
 use std::cmp::PartialEq;
 use std::fmt;
 
