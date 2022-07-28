@@ -8,14 +8,14 @@ pub struct Settings {
 }
 
 pub trait OperationCollection<T: Operation + Clone> {
-    fn find_by_name(&self, name: &str) -> Option<T>;
+    fn find_by_name(&self, name: &str) -> Option<&T>;
 }
 
 impl<T: Operation + Clone> OperationCollection<T> for Vec<T> {
-    fn find_by_name(&self, name: &str) -> Option<T> {
+    fn find_by_name(&self, name: &str) -> Option<&T> {
         for operation in self {
             if operation.get_name() == name {
-                return Some((*operation).clone());
+                return Some(operation);
             }
         }
         None
@@ -240,7 +240,7 @@ mod tests {
         let settings = get_default_settings();
         assert_eq!(
             settings.functions[0],
-            settings.functions.find_by_name("log").unwrap()
+            *settings.functions.find_by_name("log").unwrap()
         );
         assert_eq!(None, settings.functions.find_by_name("fn"));
     }
@@ -250,7 +250,7 @@ mod tests {
         let settings = get_default_settings();
         assert_eq!(
             settings.operators[0],
-            settings.operators.find_by_name("+").unwrap()
+            *settings.operators.find_by_name("+").unwrap()
         );
         assert_eq!(None, settings.operators.find_by_name("&"));
     }
