@@ -7,11 +7,11 @@ pub struct Settings {
     pub functions: Vec<Function>,
 }
 
-pub trait OperationCollection<T: Operation + Clone> {
+pub trait OperationCollection<T: Operation> {
     fn find_by_name(&self, name: &str) -> Option<&T>;
 }
 
-impl<T: Operation + Clone> OperationCollection<T> for Vec<T> {
+impl<T: Operation> OperationCollection<T> for Vec<T> {
     fn find_by_name(&self, name: &str) -> Option<&T> {
         for operation in self {
             if operation.get_name() == name {
