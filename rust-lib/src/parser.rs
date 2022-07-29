@@ -194,7 +194,7 @@ impl<'a> Parser<'a> {
         self.stack.push(token);
     }
     fn handle_comma(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
-        self.shift_while_opening_bracket(token)
+        self.shift_until_opening_bracket(token)
     }
     fn handle_operator(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
         let value = match &*token {
@@ -224,7 +224,7 @@ impl<'a> Parser<'a> {
         self.stack.push(token);
     }
     fn handle_close_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
-        self.shift_while_opening_bracket(token)?;
+        self.shift_until_opening_bracket(token)?;
         self.stack.pop();
         if self.stack.len() > 0 {
             if let Token::Function(_) = &*self.stack[self.stack.len() - 1] {
@@ -277,7 +277,7 @@ impl<'a> Parser<'a> {
             _ => Ok(()),
         }
     }
-    fn shift_while_opening_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+    fn shift_until_opening_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
         let mut tokens = VecDeque::new();
         loop {
             if self.stack.len() == 0 {
@@ -329,7 +329,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseError<'a> {
     MissingCommaOrOpeningParenthesisError(MissingCommaOrOpeningParenthesisError<'a>),
     MissionCommaError(MissionCommaError<'a>),
@@ -566,67 +566,43 @@ mod tests {
     fn test_push_token() {
         let settings = settings::get_default_settings();
         let mut parser = Parser::new("", &settings);
-        let one_token = Token::Constant(TokenValue {
-            value: 1.0,
-            string: String::from("1.0"),
-            position: 0,
-        });
-        let x_token = Token::Variable(TokenValue {
-            value: String::from("x"),
-            string: String::from("x"),
-            position: 0,
-        });
-        let plus_token = Token::Operator(TokenValue {
-            value: settings.operators.find_by_name("+").unwrap(),
-            string: String::from("+"),
-            position: 0,
-        });
-        let sin_token = Token::Function(TokenValue {
-            value: settings.functions.find_by_name("sin").unwrap(),
-            string: String::from("sin"),
-            position: 0,
-        });
-        if let Err(err) = parser.push_token(Rc::new(one_token)) {
+        if let Err(err) = parser.push_token(Rc::new(create_one_token())) {
             panic!(
                 "Expected to push a token with a constant \"1.0\", but an error was received {:?}.",
                 err
             );
         }
-        match parser.push_token(Rc::new(plus_token.clone())) {
-            Ok(_) => panic!("Expected InvalidArgumentsNumberError, but Ok(()) was received."),
-            Err(err) => assert_eq!(
-                InvalidArgumentsNumberError {
-                    token: plus_token.clone(),
-                    expected: 2,
-                    actual: 1,
-                },
-                err
-            ),
+        let expected_error = InvalidArgumentsNumberError {
+            token: create_plus_token(&settings),
+            expected: 2,
+            actual: 1,
+        };
+        match parser.push_token(Rc::new(create_plus_token(&settings))) {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
         }
-        if let Err(err) = parser.push_token(Rc::new(x_token)) {
+        if let Err(err) = parser.push_token(Rc::new(create_x_token())) {
             panic!(
                 "Expected to push a token with a variable \"x\", but an error was received {:?}.",
                 err
             )
         }
-        match parser.push_token(Rc::new(sin_token.clone())) {
-            Ok(_) => panic!("Expected InvalidArgumentsNumberError, but Ok(()) was received."),
-            Err(err) => assert_eq!(
-                InvalidArgumentsNumberError {
-                    token: sin_token.clone(),
-                    expected: 1,
-                    actual: 2
-                },
-                err
-            ),
+        let expected_error = InvalidArgumentsNumberError {
+            token: create_sin_token(&settings).clone(),
+            expected: 1,
+            actual: 2,
+        };
+        match parser.push_token(Rc::new(create_sin_token(&settings))) {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
         }
-        if let Err(err) = parser.push_token(Rc::new(plus_token.clone())) {
+        if let Err(err) = parser.push_token(Rc::new(create_plus_token(&settings))) {
             panic!(
                 "Expected to push a token with a operator \"+\", but an error was received {:?}.",
                 err
             )
         }
-        if let Err(err) = parser.push_token(Rc::new(sin_token.clone())) {
+        if let Err(err) = parser.push_token(Rc::new(create_sin_token(&settings))) {
             panic!(
                 "Expected to push a token with a function \"sin\", but an error was received {:?}.",
                 err
@@ -646,5 +622,260 @@ mod tests {
             }),
             parser.queue.pop_front().unwrap()
         );
+    }
+
+    #[test]
+    fn test_shift_until_opening_bracket() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.queue = VecDeque::from(vec![
+            Node::Value(ValueNode::Constant(1.0)),
+            Node::Value(ValueNode::Variable(String::from("x"))),
+        ]);
+        parser.stack = vec![
+            Rc::new(create_one_token()),
+            Rc::new(create_opening_bracket_token()),
+            Rc::new(create_log_token(&settings)),
+        ];
+        if let Err(err) = parser.shift_until_opening_bracket(Rc::new(create_close_bracket_token()))
+        {
+            panic!(
+                "Expected to shift until an opening bracket was encountered, but an error was received {:?}.",
+                err
+            );
+        }
+        assert_eq!(
+            vec![
+                Rc::new(create_one_token()),
+                Rc::new(create_opening_bracket_token()),
+            ],
+            parser.stack
+        );
+        assert_eq!(
+            VecDeque::from(vec![Node::Function(OperationNode {
+                operation: settings.functions.find_by_name("log").unwrap(),
+                arguments: vec![
+                    Node::Value(ValueNode::Constant(1.0)),
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                ]
+            }),]),
+            parser.queue
+        );
+    }
+
+    #[test]
+    fn test_shift_until_opening_bracket_comma() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.stack = vec![
+            Rc::new(create_one_token()),
+            Rc::new(create_log_token(&settings)),
+        ];
+        let expected_error = ParseError::MissingCommaOrOpeningParenthesisError(
+            MissingCommaOrOpeningParenthesisError {
+                token: create_comma_token(),
+            },
+        );
+        match parser.shift_until_opening_bracket(Rc::new(create_comma_token())) {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
+        }
+        let expected_stack: Vec<Rc<Token>> = vec![];
+        assert_eq!(expected_stack, parser.stack);
+        assert_eq!(VecDeque::new(), parser.queue);
+    }
+
+    #[test]
+    fn test_shift_until_opening_bracket_close_bracket() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.stack = vec![
+            Rc::new(create_one_token()),
+            Rc::new(create_log_token(&settings)),
+        ];
+        let expected_error = ParseError::MissionCommaError(MissionCommaError {
+            token: create_close_bracket_token(),
+        });
+        match parser.shift_until_opening_bracket(Rc::new(create_close_bracket_token())) {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
+        }
+        let expected_stack: Vec<Rc<Token>> = vec![];
+        assert_eq!(expected_stack, parser.stack);
+        assert_eq!(VecDeque::new(), parser.queue);
+    }
+
+    #[test]
+    fn test_shift_until_opening_bracket_invalid_arguments_number() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]);
+        parser.stack = vec![
+            Rc::new(create_one_token()),
+            Rc::new(create_opening_bracket_token()),
+            Rc::new(create_log_token(&settings)),
+        ];
+        let expected_error = ParseError::InvalidArgumentsNumberError(InvalidArgumentsNumberError {
+            token: create_log_token(&settings),
+            expected: 2,
+            actual: 1,
+        });
+        match parser.shift_until_opening_bracket(Rc::new(create_close_bracket_token())) {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
+        }
+        assert_eq!(
+            vec![
+                Rc::new(create_one_token()),
+                Rc::new(create_opening_bracket_token()),
+            ],
+            parser.stack
+        );
+        assert_eq!(
+            VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]),
+            parser.queue
+        );
+    }
+
+    #[test]
+    fn test_shift_all() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.stack = vec![
+            Rc::new(create_plus_token(&settings)),
+            Rc::new(create_one_token()),
+            Rc::new(create_x_token()),
+        ];
+        if let Err(err) = parser.shift_all() {
+            panic!("Expected to shift all elements from the stack to the queue, but an error was received {:?}.", err)
+        }
+        let expected_stack: Vec<Rc<Token>> = vec![];
+        assert_eq!(expected_stack, parser.stack);
+        assert_eq!(
+            VecDeque::from(vec![Node::Operator(OperationNode {
+                operation: settings.operators.find_by_name("+").unwrap(),
+                arguments: vec![
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                    Node::Value(ValueNode::Constant(1.0)),
+                ]
+            })]),
+            parser.queue
+        );
+    }
+
+    #[test]
+    fn test_shift_all_opening_bracket() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.stack = vec![
+            Rc::new(create_one_token()),
+            Rc::new(create_opening_bracket_token()),
+            Rc::new(create_x_token()),
+        ];
+        let expected_error = ParseError::MissionCommaError(MissionCommaError {
+            token: create_opening_bracket_token(),
+        });
+        match parser.shift_all() {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
+        }
+        assert_eq!(
+            vec![
+                Rc::new(create_one_token()),
+                Rc::new(create_opening_bracket_token()),
+            ],
+            parser.stack
+        );
+        assert_eq!(
+            VecDeque::from(vec![Node::Value(ValueNode::Variable(String::from("x")))]),
+            parser.queue
+        );
+    }
+
+    #[test]
+    fn test_shift_all_invalid_arguments_number() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]);
+        parser.stack = vec![Rc::new(create_plus_token(&settings))];
+        let expected_error = ParseError::InvalidArgumentsNumberError(InvalidArgumentsNumberError {
+            token: create_plus_token(&settings),
+            expected: 2,
+            actual: 1,
+        });
+        match parser.shift_all() {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
+        }
+        let expected_stack: Vec<Rc<Token>> = vec![];
+        assert_eq!(expected_stack, parser.stack);
+        assert_eq!(
+            VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]),
+            parser.queue
+        );
+    }
+
+    fn create_one_token() -> Token<'static> {
+        Token::Constant(TokenValue {
+            value: 1.0,
+            string: String::from("1.0"),
+            position: 0,
+        })
+    }
+
+    fn create_x_token() -> Token<'static> {
+        Token::Variable(TokenValue {
+            value: String::from("x"),
+            string: String::from("x"),
+            position: 0,
+        })
+    }
+
+    fn create_plus_token(settings: &Settings) -> Token {
+        Token::Operator(TokenValue {
+            value: settings.operators.find_by_name("+").unwrap(),
+            string: String::from("+"),
+            position: 0,
+        })
+    }
+
+    fn create_sin_token(settings: &Settings) -> Token {
+        Token::Function(TokenValue {
+            value: settings.functions.find_by_name("sin").unwrap(),
+            string: String::from("sin"),
+            position: 0,
+        })
+    }
+
+    fn create_log_token(settings: &Settings) -> Token {
+        Token::Function(TokenValue {
+            value: settings.functions.find_by_name("log").unwrap(),
+            string: String::from("log"),
+            position: 0,
+        })
+    }
+
+    fn create_opening_bracket_token() -> Token<'static> {
+        Token::OpeningBracket(TokenValue {
+            value: (),
+            string: String::from("("),
+            position: 0,
+        })
+    }
+
+    fn create_close_bracket_token() -> Token<'static> {
+        Token::CloseBracket(TokenValue {
+            value: (),
+            string: String::from(")"),
+            position: 0,
+        })
+    }
+
+    fn create_comma_token() -> Token<'static> {
+        Token::Comma(TokenValue {
+            value: (),
+            string: String::from(","),
+            position: 0,
+        })
     }
 }
