@@ -245,14 +245,14 @@ impl<'a> Parser<'a> {
                 ValueNode::Variable(token_value.value.to_owned()),
             ))),
             Token::Function(token_value) => {
-                let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
-                if arguments.len() != token_value.value.arguments_number {
+                if self.queue.len() != token_value.value.arguments_number {
                     return Err(InvalidArgumentsNumberError {
                         token: (&*token).clone(),
                         expected: token_value.value.arguments_number,
-                        actual: arguments.len(),
+                        actual: self.queue.len(),
                     });
                 }
+                let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
                 let node = Node::Function(OperationNode {
                     operation: token_value.value,
                     arguments,
@@ -260,14 +260,14 @@ impl<'a> Parser<'a> {
                 Ok(self.queue.push_back(node))
             }
             Token::Operator(token_value) => {
-                let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
-                if arguments.len() != token_value.value.arguments_number {
+                if self.queue.len() != token_value.value.arguments_number {
                     return Err(InvalidArgumentsNumberError {
                         token: (&*token).clone(),
                         expected: token_value.value.arguments_number,
-                        actual: arguments.len(),
+                        actual: self.queue.len(),
                     });
                 }
+                let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
                 let node = Node::Operator(OperationNode {
                     operation: token_value.value,
                     arguments,
@@ -338,23 +338,23 @@ pub enum ParseError<'a> {
     InvalidArgumentsNumberError(InvalidArgumentsNumberError<'a>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct MissingCommaOrOpeningParenthesisError<'a> {
     token: Token<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct MissionCommaError<'a> {
     token: Token<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct EmptyFormulaError;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct MultipleFormulaError;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct InvalidArgumentsNumberError<'a> {
     token: Token<'a>,
     expected: usize,
@@ -559,6 +559,92 @@ mod tests {
                 })),
             ],
             parser.tokens
+        );
+    }
+
+    #[test]
+    fn test_push_token() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        let one_token = Token::Constant(TokenValue {
+            value: 1.0,
+            string: String::from("1.0"),
+            position: 0,
+        });
+        let x_token = Token::Variable(TokenValue {
+            value: String::from("x"),
+            string: String::from("x"),
+            position: 0,
+        });
+        let plus_token = Token::Operator(TokenValue {
+            value: settings.operators.find_by_name("+").unwrap(),
+            string: String::from("+"),
+            position: 0,
+        });
+        let sin_token = Token::Function(TokenValue {
+            value: settings.functions.find_by_name("sin").unwrap(),
+            string: String::from("sin"),
+            position: 0,
+        });
+        if let Err(err) = parser.push_token(Rc::new(one_token)) {
+            panic!(
+                "Expected to push a token with a constant \"1.0\", but an error was received {:?}.",
+                err
+            );
+        }
+        match parser.push_token(Rc::new(plus_token.clone())) {
+            Ok(_) => panic!("Expected InvalidArgumentsNumberError, but Ok(()) was received."),
+            Err(err) => assert_eq!(
+                InvalidArgumentsNumberError {
+                    token: plus_token.clone(),
+                    expected: 2,
+                    actual: 1,
+                },
+                err
+            ),
+        }
+        if let Err(err) = parser.push_token(Rc::new(x_token)) {
+            panic!(
+                "Expected to push a token with a variable \"x\", but an error was received {:?}.",
+                err
+            )
+        }
+        match parser.push_token(Rc::new(sin_token.clone())) {
+            Ok(_) => panic!("Expected InvalidArgumentsNumberError, but Ok(()) was received."),
+            Err(err) => assert_eq!(
+                InvalidArgumentsNumberError {
+                    token: sin_token.clone(),
+                    expected: 1,
+                    actual: 2
+                },
+                err
+            ),
+        }
+        if let Err(err) = parser.push_token(Rc::new(plus_token.clone())) {
+            panic!(
+                "Expected to push a token with a operator \"+\", but an error was received {:?}.",
+                err
+            )
+        }
+        if let Err(err) = parser.push_token(Rc::new(sin_token.clone())) {
+            panic!(
+                "Expected to push a token with a function \"sin\", but an error was received {:?}.",
+                err
+            )
+        }
+        assert_eq!(parser.queue.len(), 1);
+        assert_eq!(
+            Node::Function(OperationNode {
+                operation: settings.functions.find_by_name("sin").unwrap(),
+                arguments: vec![Node::Operator(OperationNode {
+                    operation: settings.operators.find_by_name("+").unwrap(),
+                    arguments: vec![
+                        Node::Value(ValueNode::Constant(1.0)),
+                        Node::Value(ValueNode::Variable(String::from("x")))
+                    ]
+                })]
+            }),
+            parser.queue.pop_front().unwrap()
         );
     }
 }
