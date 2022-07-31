@@ -2,7 +2,7 @@
 //! The parser uses the shunting yard algorithm.
 //! https://en.wikipedia.org/wiki/Shunting_yard_algorithm
 use crate::expression_tree::{ExpressionTree, Node, OperationNode, ValueNode};
-use crate::settings::{OperationCollection, Settings};
+use crate::settings::{FunctionCollection, OperatorCollection, Settings};
 use crate::types::{Associativity, Function, Operator};
 use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
@@ -63,7 +63,11 @@ impl<'a> Parser<'a> {
                 continue;
             }
             for j in 0..string.len() {
-                if let Some(token) = self.recognize_string(&string[j..], p + j) {
+                if let Some(token) = self.recognize_string(
+                    &string[j..],
+                    p + j,
+                    j == 0 && self.is_next_operator_unary(),
+                ) {
                     if j != 0 {
                         self.tokens
                             .push(Rc::new(Parser::recognize_value_string(&string[0..j], p)));
@@ -97,8 +101,15 @@ impl<'a> Parser<'a> {
             }),
         }
     }
-    fn recognize_string(&self, string: &str, position: usize) -> Option<Token<'a>> {
-        if let Some(operation_token) = self.recognize_operation_string(string, position) {
+    fn recognize_string(
+        &self,
+        string: &str,
+        position: usize,
+        is_next_operator_unary: bool,
+    ) -> Option<Token<'a>> {
+        if let Some(operation_token) =
+            self.recognize_operation_string(string, position, is_next_operator_unary)
+        {
             return Some(operation_token);
         }
         if let Some(function_token) = Parser::recognize_service_string(string, position) {
@@ -106,8 +117,18 @@ impl<'a> Parser<'a> {
         }
         None
     }
-    fn recognize_operation_string(&self, string: &str, position: usize) -> Option<Token<'a>> {
-        if let Some(operator) = self.settings.operators.find_by_name(string) {
+    fn recognize_operation_string(
+        &self,
+        string: &str,
+        position: usize,
+        is_next_operator_unary: bool,
+    ) -> Option<Token<'a>> {
+        let operator_option = if is_next_operator_unary {
+            self.settings.operators.find_unary_by_name(string)
+        } else {
+            self.settings.operators.find_binary_by_name(string)
+        };
+        if let Some(operator) = operator_option {
             return Some(Token::Operator(TokenValue {
                 value: operator,
                 string: string.to_owned(),
@@ -122,6 +143,16 @@ impl<'a> Parser<'a> {
             }));
         }
         None
+    }
+    fn is_next_operator_unary(&self) -> bool {
+        if self.tokens.len() == 0 {
+            return true;
+        }
+        match &*self.tokens[self.tokens.len() - 1] {
+            Token::Operator(_) => true,
+            Token::OpeningBracket(_) => true,
+            _ => false,
+        }
     }
     fn recognize_service_string(string: &str, position: usize) -> Option<Token<'a>> {
         match string {
@@ -401,11 +432,11 @@ mod tests {
     #[test]
     fn test_operator_is_computed_before() {
         let settings = settings::get_default_settings();
-        let plus = settings.operators.find_by_name("+").unwrap();
-        let minus = settings.operators.find_by_name("-").unwrap();
-        let asterisk = settings.operators.find_by_name("*").unwrap();
-        let slash = settings.operators.find_by_name("/").unwrap();
-        let circumflex = settings.operators.find_by_name("^").unwrap();
+        let plus = settings.operators.find_binary_by_name("+").unwrap();
+        let minus = settings.operators.find_binary_by_name("-").unwrap();
+        let asterisk = settings.operators.find_binary_by_name("*").unwrap();
+        let slash = settings.operators.find_binary_by_name("/").unwrap();
+        let circumflex = settings.operators.find_binary_by_name("^").unwrap();
         assert!(plus.is_computed_before(plus));
         assert!(plus.is_computed_before(minus));
         assert!(!plus.is_computed_before(asterisk));
@@ -433,15 +464,43 @@ mod tests {
     }
 
     #[test]
-    fn test_recognize_string_operator() {
+    fn test_is_next_operator_unary() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        assert!(parser.is_next_operator_unary());
+        parser.tokens = vec![Rc::new(create_plus_token(&settings))];
+        assert!(parser.is_next_operator_unary());
+        parser.tokens = vec![Rc::new(create_opening_bracket_token())];
+        assert!(parser.is_next_operator_unary());
+        parser.tokens = vec![Rc::new(create_one_token())];
+        assert!(!parser.is_next_operator_unary());
+    }
+
+    #[test]
+    fn test_recognize_string_unary_operator() {
         let settings = settings::get_default_settings();
         let parser = Parser::new("", &settings);
         let expected_token = Token::Operator(TokenValue {
-            value: settings.operators.find_by_name("+").unwrap(),
-            string: String::from("+"),
+            value: settings.operators.find_unary_by_name("-").unwrap(),
+            string: String::from("-"),
             position: 5,
         });
-        match parser.recognize_string("+", 5) {
+        match parser.recognize_string("-", 5, true) {
+            Some(actual_token) => assert_eq!(expected_token, actual_token),
+            None => panic!("Expected {:?} but got None.", expected_token),
+        }
+    }
+
+    #[test]
+    fn test_recognize_string_binary_operator() {
+        let settings = settings::get_default_settings();
+        let parser = Parser::new("", &settings);
+        let expected_token = Token::Operator(TokenValue {
+            value: settings.operators.find_binary_by_name("-").unwrap(),
+            string: String::from("-"),
+            position: 5,
+        });
+        match parser.recognize_string("-", 5, false) {
             Some(actual_token) => assert_eq!(expected_token, actual_token),
             None => panic!("Expected {:?} but got None.", expected_token),
         }
@@ -456,7 +515,7 @@ mod tests {
             string: String::from("sin"),
             position: 5,
         });
-        match parser.recognize_string("sin", 5) {
+        match parser.recognize_string("sin", 5, false) {
             Some(actual_token) => assert_eq!(expected_token, actual_token),
             None => panic!("Expected {:?} but got None.", expected_token),
         }
@@ -471,7 +530,7 @@ mod tests {
             string: String::from("("),
             position: 5,
         });
-        match parser.recognize_string("(", 5) {
+        match parser.recognize_string("(", 5, false) {
             Some(actual_token) => assert_eq!(expected_token, actual_token),
             None => panic!("Expected {:?} but got None.", expected_token),
         }
@@ -481,7 +540,7 @@ mod tests {
     fn test_recognize_string_none() {
         let settings = settings::get_default_settings();
         let parser = Parser::new("", &settings);
-        if let Some(actual_token) = parser.recognize_string("unknown", 5) {
+        if let Some(actual_token) = parser.recognize_string("unknown", 5, false) {
             panic!("Expected None but got {:?}", actual_token)
         }
     }
@@ -489,7 +548,7 @@ mod tests {
     #[test]
     fn test_perform_lexical_analysis() {
         let settings = settings::get_default_settings();
-        let mut parser = Parser::new("log(2.0, x) + cos(0.0) - x", &settings);
+        let mut parser = Parser::new("log(2.0, x) + cos(-1.0) - x", &settings);
         parser.perform_lexical_analysis();
         assert_eq!(
             vec![
@@ -524,7 +583,7 @@ mod tests {
                     position: 10
                 })),
                 Rc::new(Token::Operator(TokenValue {
-                    value: settings.operators.find_by_name("+").unwrap(),
+                    value: settings.operators.find_binary_by_name("+").unwrap(),
                     string: String::from("+"),
                     position: 12
                 })),
@@ -538,25 +597,30 @@ mod tests {
                     string: String::from("("),
                     position: 17
                 })),
-                Rc::new(Token::Constant(TokenValue {
-                    value: 0.0,
-                    string: String::from("0.0"),
+                Rc::new(Token::Operator(TokenValue {
+                    value: settings.operators.find_unary_by_name("-").unwrap(),
+                    string: String::from("-"),
                     position: 18
+                })),
+                Rc::new(Token::Constant(TokenValue {
+                    value: 1.0,
+                    string: String::from("1.0"),
+                    position: 19
                 })),
                 Rc::new(Token::CloseBracket(TokenValue {
                     value: (),
                     string: String::from(")"),
-                    position: 21
+                    position: 22
                 })),
                 Rc::new(Token::Operator(TokenValue {
-                    value: settings.operators.find_by_name("-").unwrap(),
+                    value: settings.operators.find_binary_by_name("-").unwrap(),
                     string: String::from("-"),
-                    position: 23
+                    position: 24
                 })),
                 Rc::new(Token::Variable(TokenValue {
                     value: String::from("x"),
                     string: String::from("x"),
-                    position: 25
+                    position: 26
                 })),
             ],
             parser.tokens
@@ -613,7 +677,7 @@ mod tests {
             VecDeque::from(vec![Node::Function(OperationNode {
                 operation: settings.functions.find_by_name("sin").unwrap(),
                 arguments: vec![Node::Operator(OperationNode {
-                    operation: settings.operators.find_by_name("+").unwrap(),
+                    operation: settings.operators.find_binary_by_name("+").unwrap(),
                     arguments: vec![
                         Node::Value(ValueNode::Constant(1.0)),
                         Node::Value(ValueNode::Variable(String::from("x")))
@@ -753,7 +817,7 @@ mod tests {
         assert_eq!(expected_stack, parser.stack);
         assert_eq!(
             VecDeque::from(vec![Node::Operator(OperationNode {
-                operation: settings.operators.find_by_name("+").unwrap(),
+                operation: settings.operators.find_binary_by_name("+").unwrap(),
                 arguments: vec![
                     Node::Value(ValueNode::Variable(String::from("x"))),
                     Node::Value(ValueNode::Constant(1.0)),
@@ -886,7 +950,7 @@ mod tests {
         assert_eq!(vec![Rc::new(create_plus_token(&settings)),], parser.stack);
         assert_eq!(
             VecDeque::from(vec![Node::Operator(OperationNode {
-                operation: settings.operators.find_by_name("*").unwrap(),
+                operation: settings.operators.find_binary_by_name("*").unwrap(),
                 arguments: vec![
                     Node::Value(ValueNode::Constant(1.0)),
                     Node::Value(ValueNode::Variable(String::from("x"))),
@@ -969,7 +1033,7 @@ mod tests {
 
     fn create_plus_token(settings: &Settings) -> Token {
         Token::Operator(TokenValue {
-            value: settings.operators.find_by_name("+").unwrap(),
+            value: settings.operators.find_binary_by_name("+").unwrap(),
             string: String::from("+"),
             position: 0,
         })
@@ -977,7 +1041,7 @@ mod tests {
 
     fn create_asterisk_token(settings: &Settings) -> Token {
         Token::Operator(TokenValue {
-            value: settings.operators.find_by_name("*").unwrap(),
+            value: settings.operators.find_binary_by_name("*").unwrap(),
             string: String::from("*"),
             position: 0,
         })

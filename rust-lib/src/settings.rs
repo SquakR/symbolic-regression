@@ -7,15 +7,39 @@ pub struct Settings {
     pub functions: Vec<Function>,
 }
 
-pub trait OperationCollection<T: Operation> {
-    fn find_by_name(&self, name: &str) -> Option<&T>;
+pub trait FunctionCollection {
+    fn find_by_name(&self, name: &str) -> Option<&Function>;
 }
 
-impl<T: Operation> OperationCollection<T> for Vec<T> {
-    fn find_by_name(&self, name: &str) -> Option<&T> {
-        for operation in self {
-            if operation.get_name() == name {
-                return Some(operation);
+impl FunctionCollection for Vec<Function> {
+    fn find_by_name(&self, name: &str) -> Option<&Function> {
+        for function in self {
+            if function.get_name() == name {
+                return Some(function);
+            }
+        }
+        None
+    }
+}
+
+pub trait OperatorCollection {
+    fn find_unary_by_name(&self, name: &str) -> Option<&Operator>;
+    fn find_binary_by_name(&self, name: &str) -> Option<&Operator>;
+}
+
+impl OperatorCollection for Vec<Operator> {
+    fn find_unary_by_name(&self, name: &str) -> Option<&Operator> {
+        for operator in self {
+            if operator.get_name() == name && operator.arguments_number == 1 {
+                return Some(operator);
+            }
+        }
+        None
+    }
+    fn find_binary_by_name(&self, name: &str) -> Option<&Operator> {
+        for operator in self {
+            if operator.get_name() == name && operator.arguments_number == 2 {
+                return Some(operator);
             }
         }
         None
@@ -31,7 +55,6 @@ pub fn get_default_settings() -> Settings {
                 precedence: 1,
                 associativity: Associativity::Left,
                 complexity: 1,
-                io_only: false,
                 compute_fn: |arguments| arguments[0] + arguments[1],
             },
             Operator {
@@ -40,7 +63,6 @@ pub fn get_default_settings() -> Settings {
                 precedence: 1,
                 associativity: Associativity::Left,
                 complexity: 1,
-                io_only: false,
                 compute_fn: |arguments| arguments[0] - arguments[1],
             },
             Operator {
@@ -49,7 +71,6 @@ pub fn get_default_settings() -> Settings {
                 precedence: 2,
                 associativity: Associativity::Left,
                 complexity: 2,
-                io_only: false,
                 compute_fn: |arguments| arguments[0] * arguments[1],
             },
             Operator {
@@ -58,7 +79,6 @@ pub fn get_default_settings() -> Settings {
                 precedence: 2,
                 associativity: Associativity::Left,
                 complexity: 2,
-                io_only: false,
                 compute_fn: |arguments| arguments[0] / arguments[1],
             },
             Operator {
@@ -67,16 +87,22 @@ pub fn get_default_settings() -> Settings {
                 precedence: 3,
                 associativity: Associativity::Right,
                 complexity: 3,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].powf(arguments[1]),
+            },
+            Operator {
+                name: String::from("+"),
+                arguments_number: 1,
+                precedence: 4,
+                associativity: Associativity::Right,
+                complexity: 1,
+                compute_fn: |arguments| arguments[0],
             },
             Operator {
                 name: String::from("-"),
                 arguments_number: 1,
-                precedence: 1,
-                associativity: Associativity::Left,
+                precedence: 4,
+                associativity: Associativity::Right,
                 complexity: 1,
-                io_only: true,
                 compute_fn: |arguments| -arguments[0],
             },
         ],
@@ -243,22 +269,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_find_operator_by_name() {
+    fn test_find_unary_operator_by_name() {
         let settings = get_default_settings();
         assert_eq!(
-            settings.functions[0],
-            *settings.functions.find_by_name("log").unwrap()
+            &settings.operators[5],
+            settings.operators.find_unary_by_name("+").unwrap()
         );
-        assert_eq!(None, settings.functions.find_by_name("fn"));
+        assert_eq!(None, settings.operators.find_unary_by_name("&"));
+    }
+
+    #[test]
+    fn test_find_binary_operator_by_name() {
+        let settings = get_default_settings();
+        assert_eq!(
+            &settings.operators[0],
+            settings.operators.find_binary_by_name("+").unwrap()
+        );
+        assert_eq!(None, settings.operators.find_binary_by_name("&"));
     }
 
     #[test]
     fn test_find_function_by_name() {
         let settings = get_default_settings();
         assert_eq!(
-            settings.operators[0],
-            *settings.operators.find_by_name("+").unwrap()
+            &settings.functions[0],
+            settings.functions.find_by_name("abs").unwrap()
         );
-        assert_eq!(None, settings.operators.find_by_name("&"));
+        assert_eq!(None, settings.functions.find_by_name("fn"));
     }
 }

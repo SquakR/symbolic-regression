@@ -14,7 +14,6 @@ pub struct Operator {
     pub associativity: Associativity,
     pub arguments_number: usize,
     pub complexity: u32,
-    pub io_only: bool,
     pub compute_fn: fn(&[f64]) -> f64,
 }
 
@@ -43,7 +42,6 @@ impl fmt::Debug for Operator {
             .field("precedence", &self.precedence)
             .field("associativity", &self.associativity)
             .field("complexity", &self.complexity)
-            .field("io_only", &self.io_only)
             .finish()
     }
 }
@@ -126,7 +124,7 @@ mod tests {
         fn test_debug() {
             let test_operator = create_test_operator();
             assert_eq!(
-                "Operator { name: \"+\", arguments_number: 2, precedence: 1, associativity: Left, complexity: 1, io_only: false }",
+                "Operator { name: \"+\", arguments_number: 2, precedence: 1, associativity: Left, complexity: 1 }",
                 format!("{:?}", test_operator)
             );
         }
@@ -159,7 +157,6 @@ mod tests {
                 precedence: 1,
                 associativity: Associativity::Left,
                 complexity: 1,
-                io_only: false,
                 compute_fn: |arguments| arguments[0] + arguments[1],
             }
         }

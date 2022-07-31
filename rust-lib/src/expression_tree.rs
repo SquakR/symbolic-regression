@@ -173,7 +173,7 @@ impl Computable for ValueNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::{self, OperationCollection, Settings};
+    use crate::settings::{self, FunctionCollection, OperatorCollection, Settings};
 
     #[test]
     #[should_panic(expected = "Expression tree does not contain y variable.")]
@@ -189,17 +189,17 @@ mod tests {
         let tree = create_test_tree_with_variables(&settings);
         let expected_tree = ExpressionTree {
             root: Node::Operator(OperationNode {
-                operation: settings.operators.find_by_name("+").unwrap(),
+                operation: settings.operators.find_binary_by_name("+").unwrap(),
                 arguments: vec![
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_by_name("-").unwrap(),
+                        operation: settings.operators.find_binary_by_name("-").unwrap(),
                         arguments: vec![
                             Node::Value(ValueNode::Constant(2.0)),
                             Node::Value(ValueNode::Constant(1.0)),
                         ],
                     }),
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_by_name("*").unwrap(),
+                        operation: settings.operators.find_binary_by_name("*").unwrap(),
                         arguments: vec![
                             Node::Function(OperationNode {
                                 operation: settings.functions.find_by_name("sin").unwrap(),
@@ -234,7 +234,7 @@ mod tests {
     fn test_operation_node_compute() -> Result<(), ComputeError> {
         let settings = settings::get_default_settings();
         let actual = OperationNode {
-            operation: settings.operators.find_by_name("+").unwrap(),
+            operation: settings.operators.find_binary_by_name("+").unwrap(),
             arguments: vec![
                 Node::Value(ValueNode::Constant(1.0)),
                 Node::Value(ValueNode::Constant(2.0)),
@@ -256,7 +256,7 @@ mod tests {
     fn test_node_operator_compute() -> Result<(), ComputeError> {
         let settings = settings::get_default_settings();
         let actual = Node::Operator(OperationNode {
-            operation: settings.operators.find_by_name("+").unwrap(),
+            operation: settings.operators.find_binary_by_name("+").unwrap(),
             arguments: vec![
                 Node::Value(ValueNode::Constant(1.0)),
                 Node::Value(ValueNode::Constant(2.0)),
@@ -316,7 +316,7 @@ mod tests {
             root: Node::Function(OperationNode {
                 operation: settings.functions.find_by_name("sin").unwrap(),
                 arguments: vec![Node::Operator(OperationNode {
-                    operation: settings.operators.find_by_name("+").unwrap(),
+                    operation: settings.operators.find_binary_by_name("+").unwrap(),
                     arguments: vec![
                         Node::Value(ValueNode::Variable(String::from("x"))),
                         Node::Value(ValueNode::Constant(14.0)),
@@ -331,17 +331,17 @@ mod tests {
     fn create_test_tree_with_variables(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
-                operation: settings.operators.find_by_name("+").unwrap(),
+                operation: settings.operators.find_binary_by_name("+").unwrap(),
                 arguments: vec![
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_by_name("-").unwrap(),
+                        operation: settings.operators.find_binary_by_name("-").unwrap(),
                         arguments: vec![
                             Node::Value(ValueNode::Variable(String::from("x1"))),
                             Node::Value(ValueNode::Constant(1.0)),
                         ],
                     }),
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_by_name("*").unwrap(),
+                        operation: settings.operators.find_binary_by_name("*").unwrap(),
                         arguments: vec![
                             Node::Function(OperationNode {
                                 operation: settings.functions.find_by_name("sin").unwrap(),
@@ -361,17 +361,17 @@ mod tests {
     fn create_test_tree_without_variables(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
-                operation: settings.operators.find_by_name("+").unwrap(),
+                operation: settings.operators.find_binary_by_name("+").unwrap(),
                 arguments: vec![
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_by_name("*").unwrap(),
+                        operation: settings.operators.find_binary_by_name("*").unwrap(),
                         arguments: vec![
                             Node::Value(ValueNode::Constant(2.0)),
                             Node::Value(ValueNode::Constant(3.0)),
                         ],
                     }),
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_by_name("*").unwrap(),
+                        operation: settings.operators.find_binary_by_name("*").unwrap(),
                         arguments: vec![
                             Node::Function(OperationNode {
                                 operation: settings.functions.find_by_name("sin").unwrap(),
@@ -391,15 +391,15 @@ mod tests {
             root: Node::Function(OperationNode {
                 operation: settings.functions.find_by_name("sin").unwrap(),
                 arguments: vec![Node::Operator(OperationNode {
-                    operation: settings.operators.find_by_name("+").unwrap(),
+                    operation: settings.operators.find_binary_by_name("+").unwrap(),
                     arguments: vec![
                         Node::Value(ValueNode::Variable(String::from("x"))),
                         Node::Operator(OperationNode {
-                            operation: settings.operators.find_by_name("*").unwrap(),
+                            operation: settings.operators.find_binary_by_name("*").unwrap(),
                             arguments: vec![
                                 Node::Value(ValueNode::Constant(2.0)),
                                 Node::Operator(OperationNode {
-                                    operation: settings.operators.find_by_name("+").unwrap(),
+                                    operation: settings.operators.find_binary_by_name("+").unwrap(),
                                     arguments: vec![
                                         Node::Value(ValueNode::Constant(3.0)),
                                         Node::Value(ValueNode::Constant(4.0)),
