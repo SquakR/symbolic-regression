@@ -201,20 +201,21 @@ impl<'a> Parser<'a> {
             Token::Operator(token_value) => token_value.value.to_owned(),
             _ => unreachable!(),
         };
-        if self.stack.len() > 0 {
-            loop {
-                if let Token::Operator(token_value_o2) = &*self.stack[self.stack.len() - 1] {
-                    if token_value_o2.value.is_computed_before(&value) {
-                        let last_token = self.stack.pop().unwrap();
-                        if let Err(err) = self.push_token(last_token) {
-                            return Err(ParseError::InvalidArgumentsNumberError(err));
-                        }
-                    } else {
-                        break;
+        loop {
+            if self.stack.len() == 0 {
+                break;
+            }
+            if let Token::Operator(token_value_o2) = &*self.stack[self.stack.len() - 1] {
+                if token_value_o2.value.is_computed_before(&value) {
+                    let last_token = self.stack.pop().unwrap();
+                    if let Err(err) = self.push_token(last_token) {
+                        return Err(ParseError::InvalidArgumentsNumberError(err));
                     }
                 } else {
                     break;
                 }
+            } else {
+                break;
             }
         }
         self.stack.push(token);
@@ -608,9 +609,8 @@ mod tests {
                 err
             )
         }
-        assert_eq!(parser.queue.len(), 1);
         assert_eq!(
-            Node::Function(OperationNode {
+            VecDeque::from(vec![Node::Function(OperationNode {
                 operation: settings.functions.find_by_name("sin").unwrap(),
                 arguments: vec![Node::Operator(OperationNode {
                     operation: settings.operators.find_by_name("+").unwrap(),
@@ -619,8 +619,8 @@ mod tests {
                         Node::Value(ValueNode::Variable(String::from("x")))
                     ]
                 })]
-            }),
-            parser.queue.pop_front().unwrap()
+            }),]),
+            parser.queue
         );
     }
 
@@ -815,6 +815,142 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_handle_constant() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        match parser.handle_constant(Rc::new(create_one_token())) {
+            Ok(_) => assert_eq!(
+                VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]),
+                parser.queue
+            ),
+            Err(_) => unreachable!(),
+        };
+    }
+
+    #[test]
+    fn test_handle_variable() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        match parser.handle_variable(Rc::new(create_x_token())) {
+            Ok(_) => {
+                assert_eq!(
+                    VecDeque::from(vec![Node::Value(ValueNode::Variable(String::from("x")))]),
+                    parser.queue
+                );
+                assert_eq!(
+                    HashSet::from_iter(vec![String::from("x")]),
+                    parser.variables
+                );
+            }
+            Err(_) => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_handle_operator_without_computed_before() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.stack = vec![Rc::new(create_plus_token(&settings))];
+        if let Err(err) = parser.handle_operator(Rc::new(create_asterisk_token(&settings))) {
+            panic!(
+                "Expected to handle a asterisk token, but an error was received {:?}.",
+                err
+            )
+        }
+        assert_eq!(
+            vec![
+                Rc::new(create_plus_token(&settings)),
+                Rc::new(create_asterisk_token(&settings))
+            ],
+            parser.stack
+        );
+        assert_eq!(VecDeque::new(), parser.queue);
+    }
+
+    #[test]
+    fn test_handle_operator_with_computed_before() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.queue = VecDeque::from(vec![
+            Node::Value(ValueNode::Constant(1.0)),
+            Node::Value(ValueNode::Variable(String::from("x"))),
+        ]);
+        parser.stack = vec![Rc::new(create_asterisk_token(&settings))];
+        if let Err(err) = parser.handle_operator(Rc::new(create_plus_token(&settings))) {
+            panic!(
+                "Expected to handle a plus token, but an error was received {:?}.",
+                err
+            )
+        }
+        assert_eq!(vec![Rc::new(create_plus_token(&settings)),], parser.stack);
+        assert_eq!(
+            VecDeque::from(vec![Node::Operator(OperationNode {
+                operation: settings.operators.find_by_name("*").unwrap(),
+                arguments: vec![
+                    Node::Value(ValueNode::Constant(1.0)),
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                ]
+            })]),
+            parser.queue
+        );
+    }
+
+    #[test]
+    fn test_handle_operator_with_computed_before_invalid_arguments_number() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]);
+        parser.stack = vec![Rc::new(create_asterisk_token(&settings))];
+        let expected_error = ParseError::InvalidArgumentsNumberError(InvalidArgumentsNumberError {
+            token: create_asterisk_token(&settings),
+            expected: 2,
+            actual: 1,
+        });
+        match parser.handle_operator(Rc::new(create_plus_token(&settings))) {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
+        };
+        let expected_stack: Vec<Rc<Token>> = vec![];
+        assert_eq!(expected_stack, parser.stack);
+        assert_eq!(
+            VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]),
+            parser.queue
+        );
+    }
+
+    #[test]
+    fn test_handle_close_bracket() {
+        let settings = settings::get_default_settings();
+        let mut parser = Parser::new("", &settings);
+        parser.queue = VecDeque::from(vec![
+            Node::Value(ValueNode::Constant(1.0)),
+            Node::Value(ValueNode::Variable(String::from("x"))),
+        ]);
+        parser.stack = vec![
+            Rc::new(create_one_token()),
+            Rc::new(create_log_token(&settings)),
+            Rc::new(create_opening_bracket_token()),
+        ];
+        if let Err(err) = parser.handle_close_bracket(Rc::new(create_close_bracket_token())) {
+            panic!(
+                "Expected to handle a close bracket, but an error was received {:?}.",
+                err
+            )
+        }
+        assert_eq!(vec![Rc::new(create_one_token())], parser.stack);
+        assert_eq!(
+            VecDeque::from(vec![Node::Function(OperationNode {
+                operation: settings.functions.find_by_name("log").unwrap(),
+                arguments: vec![
+                    Node::Value(ValueNode::Constant(1.0)),
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                ]
+            })]),
+            parser.queue
+        )
+    }
+
     fn create_one_token() -> Token<'static> {
         Token::Constant(TokenValue {
             value: 1.0,
@@ -835,6 +971,14 @@ mod tests {
         Token::Operator(TokenValue {
             value: settings.operators.find_by_name("+").unwrap(),
             string: String::from("+"),
+            position: 0,
+        })
+    }
+
+    fn create_asterisk_token(settings: &Settings) -> Token {
+        Token::Operator(TokenValue {
+            value: settings.operators.find_by_name("*").unwrap(),
+            string: String::from("*"),
             position: 0,
         })
     }
