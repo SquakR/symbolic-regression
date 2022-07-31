@@ -277,14 +277,18 @@ impl<'a> Parser<'a> {
                 ValueNode::Variable(token_value.value.to_owned()),
             ))),
             Token::Function(token_value) => {
-                if self.queue.len() != token_value.value.arguments_number {
+                if self.queue.len() < token_value.value.arguments_number {
                     return Err(InvalidArgumentsNumberError {
                         token: (&*token).clone(),
                         expected: token_value.value.arguments_number,
                         actual: self.queue.len(),
                     });
                 }
-                let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
+                let arguments = self
+                    .queue
+                    .split_off(self.queue.len() - token_value.value.arguments_number)
+                    .into_iter()
+                    .collect::<Vec<Node>>();
                 let node = Node::Function(OperationNode {
                     operation: token_value.value,
                     arguments,
@@ -292,14 +296,18 @@ impl<'a> Parser<'a> {
                 Ok(self.queue.push_back(node))
             }
             Token::Operator(token_value) => {
-                if self.queue.len() != token_value.value.arguments_number {
+                if self.queue.len() < token_value.value.arguments_number {
                     return Err(InvalidArgumentsNumberError {
                         token: (&*token).clone(),
                         expected: token_value.value.arguments_number,
                         actual: self.queue.len(),
                     });
                 }
-                let arguments = self.queue.split_off(0).into_iter().collect::<Vec<Node>>();
+                let arguments = self
+                    .queue
+                    .split_off(self.queue.len() - token_value.value.arguments_number)
+                    .into_iter()
+                    .collect::<Vec<Node>>();
                 let node = Node::Operator(OperationNode {
                     operation: token_value.value,
                     arguments,
@@ -651,15 +659,6 @@ mod tests {
                 "Expected to push a token with a variable \"x\", but an error was received {:?}.",
                 err
             )
-        }
-        let expected_error = InvalidArgumentsNumberError {
-            token: create_sin_token(&settings).clone(),
-            expected: 1,
-            actual: 2,
-        };
-        match parser.push_token(Rc::new(create_sin_token(&settings))) {
-            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
-            Err(err) => assert_eq!(expected_error, err),
         }
         if let Err(err) = parser.push_token(Rc::new(create_plus_token(&settings))) {
             panic!(
