@@ -60,8 +60,17 @@ impl<'a> Parser<'a> {
         let mut p = 0;
         for (i, c) in self.expression.chars().enumerate() {
             if c.is_whitespace() {
+                if string.len() != 0 {
+                    self.tokens.push(Rc::new(Parser::recognize_value_string(
+                        &string,
+                        self.expression.len() - string.len(),
+                    )));
+                    string = String::new();
+                }
+                p = i + 1;
                 continue;
             }
+            string.push(c);
             for j in 0..string.len() {
                 if let Some(token) = self.recognize_string(
                     &string[j..],
@@ -74,11 +83,10 @@ impl<'a> Parser<'a> {
                     }
                     self.tokens.push(Rc::new(token));
                     string = String::new();
-                    p = i;
+                    p = i + 1;
                     break;
                 }
             }
-            string.push(c);
         }
         if string.len() != 0 {
             self.tokens.push(Rc::new(Parser::recognize_value_string(
