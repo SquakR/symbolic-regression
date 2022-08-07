@@ -23,7 +23,7 @@ struct Parser<'a> {
     tokens: Vec<Rc<Token<'a>>>,
     queue: VecDeque<Node<'a>>,
     stack: Vec<Rc<Token<'a>>>,
-    variables: HashSet<String>,
+    variables: Vec<String>,
 }
 
 impl<'a> Parser<'a> {
@@ -52,7 +52,7 @@ impl<'a> Parser<'a> {
             tokens: vec![],
             queue: VecDeque::new(),
             stack: vec![],
-            variables: HashSet::new(),
+            variables: vec![],
         }
     }
     fn perform_lexical_analysis(&mut self) {
@@ -223,7 +223,9 @@ impl<'a> Parser<'a> {
             Token::Variable(token_value) => token_value.value.to_owned(),
             _ => unreachable!(),
         };
-        self.variables.insert(value.to_owned());
+        if !self.variables.contains(&value) {
+            self.variables.push(value.to_owned());
+        }
         match self.push_token(token) {
             Err(err) => Err(ParseError::InvalidArgumentsNumberError(err)),
             Ok(_) => Ok(()),
@@ -909,10 +911,7 @@ mod tests {
                     VecDeque::from(vec![Node::Value(ValueNode::Variable(String::from("x")))]),
                     parser.queue
                 );
-                assert_eq!(
-                    HashSet::from_iter(vec![String::from("x")]),
-                    parser.variables
-                );
+                assert_eq!(vec![String::from("x")], parser.variables);
             }
             Err(_) => unreachable!(),
         }
@@ -1020,6 +1019,152 @@ mod tests {
             })]),
             parser.queue
         )
+    }
+
+    #[test]
+    fn test_parse_empty_formula_error() {
+        let settings = settings::get_default_settings();
+        let expected_error = ParseError::EmptyFormulaError(EmptyFormulaError);
+        match Parser::parse("", &settings) {
+            Ok(actual_tree) => panic!(
+                "Expected {:?}, but {:?} was received.",
+                expected_error, actual_tree
+            ),
+            Err(err) => assert_eq!(expected_error, err),
+        }
+    }
+
+    #[test]
+    fn multiple_formula_error() {
+        let settings = settings::get_default_settings();
+        let expected_error = ParseError::MultipleFormulaError(MultipleFormulaError);
+        match Parser::parse("x + 1 1 + 2", &settings) {
+            Ok(actual_tree) => panic!(
+                "Expected {:?}, but {:?} was received.",
+                expected_error, actual_tree
+            ),
+            Err(err) => assert_eq!(expected_error, err),
+        }
+    }
+
+    #[test]
+    fn test_parse_without_functions() {
+        let settings = settings::get_default_settings();
+        let expression = String::from("3 + 4 * 2 / ( x - 5 ) ^ -2 ^ 3");
+        let plus = settings.operators.find_binary_by_name("+").unwrap();
+        let unary_minus = settings.operators.find_unary_by_name("-").unwrap();
+        let binary_minus = settings.operators.find_binary_by_name("-").unwrap();
+        let slash = settings.operators.find_binary_by_name("/").unwrap();
+        let asterisk = settings.operators.find_binary_by_name("*").unwrap();
+        let circumflex = settings.operators.find_binary_by_name("^").unwrap();
+        match Parser::parse(&expression, &settings) {
+            Ok(actual_tree) => assert_eq!(
+                ExpressionTree {
+                    root: Node::Operator(OperationNode {
+                        operation: plus,
+                        arguments: vec![
+                            Node::Value(ValueNode::Constant(3.0)),
+                            Node::Operator(OperationNode {
+                                operation: slash,
+                                arguments: vec![
+                                    Node::Operator(OperationNode {
+                                        operation: asterisk,
+                                        arguments: vec![
+                                            Node::Value(ValueNode::Constant(4.0)),
+                                            Node::Value(ValueNode::Constant(2.0)),
+                                        ]
+                                    }),
+                                    Node::Operator(OperationNode {
+                                        operation: circumflex,
+                                        arguments: vec![
+                                            Node::Operator(OperationNode {
+                                                operation: binary_minus,
+                                                arguments: vec![
+                                                    Node::Value(ValueNode::Variable(String::from(
+                                                        "x"
+                                                    ))),
+                                                    Node::Value(ValueNode::Constant(5.0)),
+                                                ]
+                                            }),
+                                            Node::Operator(OperationNode {
+                                                operation: circumflex,
+                                                arguments: vec![
+                                                    Node::Operator(OperationNode {
+                                                        operation: unary_minus,
+                                                        arguments: vec![Node::Value(
+                                                            ValueNode::Constant(2.0)
+                                                        ),]
+                                                    }),
+                                                    Node::Value(ValueNode::Constant(3.0)),
+                                                ]
+                                            })
+                                        ]
+                                    })
+                                ]
+                            })
+                        ]
+                    }),
+                    variables: vec![String::from("x")]
+                },
+                actual_tree
+            ),
+            Err(err) => panic!(
+                "Expected to parse \"{}\" expression, but an error was received {:?}.",
+                expression, err
+            ),
+        }
+    }
+
+    #[test]
+    fn test_parse_with_functions() {
+        let settings = settings::get_default_settings();
+        let expression = String::from("-sin(log(2, 3) / x1 * x2)");
+        let unary_minus = settings.operators.find_unary_by_name("-").unwrap();
+        let asterisk = settings.operators.find_binary_by_name("*").unwrap();
+        let slash = settings.operators.find_binary_by_name("/").unwrap();
+        let sin = settings.functions.find_by_name("sin").unwrap();
+        let log = settings.functions.find_by_name("log").unwrap();
+        match Parser::parse(&expression, &settings) {
+            Ok(actual_tree) => {
+                assert_eq!(
+                    ExpressionTree {
+                        root: Node::Operator(OperationNode {
+                            operation: unary_minus,
+                            arguments: vec![Node::Function(OperationNode {
+                                operation: sin,
+                                arguments: vec![Node::Operator(OperationNode {
+                                    operation: asterisk,
+                                    arguments: vec![
+                                        Node::Operator(OperationNode {
+                                            operation: slash,
+                                            arguments: vec![
+                                                Node::Function(OperationNode {
+                                                    operation: log,
+                                                    arguments: vec![
+                                                        Node::Value(ValueNode::Constant(2.0)),
+                                                        Node::Value(ValueNode::Constant(3.0)),
+                                                    ]
+                                                }),
+                                                Node::Value(ValueNode::Variable(String::from(
+                                                    "x1"
+                                                )))
+                                            ]
+                                        }),
+                                        Node::Value(ValueNode::Variable(String::from("x2")))
+                                    ]
+                                })]
+                            })]
+                        }),
+                        variables: vec![String::from("x1"), String::from("x2")]
+                    },
+                    actual_tree
+                )
+            }
+            Err(err) => panic!(
+                "Expected to parse \"{}\" expression, but an error was received {:?}.",
+                expression, err
+            ),
+        }
     }
 
     fn create_one_token() -> Token<'static> {
