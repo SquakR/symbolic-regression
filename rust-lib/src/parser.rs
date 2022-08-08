@@ -5,14 +5,15 @@ use crate::expression_tree::{ExpressionTree, Node, OperationNode, ValueNode};
 use crate::settings::{FunctionCollection, OperatorCollection, Settings};
 use crate::types::{Associativity, Function, Operator};
 use std::cmp::Ordering;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
+use std::fmt;
 use std::rc::Rc;
 
 impl<'a> ExpressionTree<'a> {
     pub fn parse(
         expression: &str,
         settings: &'a Settings,
-    ) -> Result<ExpressionTree<'a>, ParseError<'a>> {
+    ) -> Result<ExpressionTree<'a>, ParseError> {
         Parser::parse(expression, settings)
     }
 }
@@ -27,18 +28,15 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn parse(
-        expression: &str,
-        settings: &'a Settings,
-    ) -> Result<ExpressionTree<'a>, ParseError<'a>> {
+    fn parse(expression: &str, settings: &'a Settings) -> Result<ExpressionTree<'a>, ParseError> {
         if expression.len() == 0 {
-            return Err(ParseError::EmptyFormulaError(EmptyFormulaError {}));
+            return Err(ParseError::EmptyFormulaError);
         }
         let mut parser = Parser::new(expression, settings);
         parser.perform_lexical_analysis();
         parser.handle_tokens()?;
         if parser.queue.len() != 1 {
-            return Err(ParseError::MultipleFormulaError(MultipleFormulaError {}));
+            return Err(ParseError::MultipleFormulaError);
         }
         Ok(ExpressionTree {
             root: parser.queue.pop_front().unwrap(),
@@ -182,7 +180,7 @@ impl<'a> Parser<'a> {
             _ => None,
         }
     }
-    fn handle_tokens(&mut self) -> Result<(), ParseError<'a>> {
+    fn handle_tokens(&mut self) -> Result<(), ParseError> {
         let tokens_rcs = self.tokens.iter().cloned().collect::<Vec<Rc<Token>>>();
         for token in tokens_rcs {
             match &*token {
@@ -212,13 +210,13 @@ impl<'a> Parser<'a> {
         self.shift_all()?;
         Ok(())
     }
-    fn handle_constant(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+    fn handle_constant(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
         match self.push_token(token) {
             Err(err) => Err(ParseError::InvalidArgumentsNumberError(err)),
             Ok(_) => Ok(()),
         }
     }
-    fn handle_variable(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+    fn handle_variable(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
         let value = match &*token {
             Token::Variable(token_value) => token_value.value.to_owned(),
             _ => unreachable!(),
@@ -234,10 +232,10 @@ impl<'a> Parser<'a> {
     fn handle_function(&mut self, token: Rc<Token<'a>>) {
         self.stack.push(token);
     }
-    fn handle_comma(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+    fn handle_comma(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
         self.shift_until_opening_bracket(token)
     }
-    fn handle_operator(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+    fn handle_operator(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
         let value = match &*token {
             Token::Operator(token_value) => token_value.value.to_owned(),
             _ => unreachable!(),
@@ -265,7 +263,7 @@ impl<'a> Parser<'a> {
     fn handle_opening_bracket(&mut self, token: Rc<Token<'a>>) {
         self.stack.push(token);
     }
-    fn handle_close_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+    fn handle_close_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
         self.shift_until_opening_bracket(token)?;
         self.stack.pop();
         if self.stack.len() > 0 {
@@ -278,7 +276,7 @@ impl<'a> Parser<'a> {
         }
         Ok(())
     }
-    fn push_token(&mut self, token: Rc<Token<'a>>) -> Result<(), InvalidArgumentsNumberError<'a>> {
+    fn push_token(&mut self, token: Rc<Token<'a>>) -> Result<(), InvalidArgumentsNumberError> {
         match &*token {
             Token::Constant(token_value) => Ok(self
                 .queue
@@ -289,7 +287,7 @@ impl<'a> Parser<'a> {
             Token::Function(token_value) => {
                 if self.queue.len() < token_value.value.arguments_number {
                     return Err(InvalidArgumentsNumberError {
-                        token: (&*token).clone(),
+                        data: (&*token).get_error_token_data(),
                         expected: token_value.value.arguments_number,
                         actual: self.queue.len(),
                     });
@@ -308,7 +306,7 @@ impl<'a> Parser<'a> {
             Token::Operator(token_value) => {
                 if self.queue.len() < token_value.value.arguments_number {
                     return Err(InvalidArgumentsNumberError {
-                        token: (&*token).clone(),
+                        data: (&*token).get_error_token_data(),
                         expected: token_value.value.arguments_number,
                         actual: self.queue.len(),
                     });
@@ -327,22 +325,22 @@ impl<'a> Parser<'a> {
             _ => Ok(()),
         }
     }
-    fn shift_until_opening_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError<'a>> {
+    fn shift_until_opening_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
         let mut tokens = VecDeque::new();
         loop {
             if self.stack.len() == 0 {
                 match *token {
                     Token::Comma(_) => {
-                        return Err(ParseError::MissingCommaOrOpeningParenthesisError(
-                            MissingCommaOrOpeningParenthesisError {
-                                token: (&*token).clone(),
+                        return Err(ParseError::MissingCommaOrOpeningBracketError(
+                            MissingCommaOrOpeningBracketError {
+                                data: (&*token).get_error_token_data(),
                             },
                         ))
                     }
                     Token::CloseBracket(_) => {
-                        return Err(ParseError::MissionCommaError({
-                            MissionCommaError {
-                                token: (&*token).clone(),
+                        return Err(ParseError::MissingCommaError({
+                            MissingCommaError {
+                                data: (&*token).get_error_token_data(),
                             }
                         }))
                     }
@@ -361,14 +359,14 @@ impl<'a> Parser<'a> {
         }
         Ok(())
     }
-    fn shift_all(&mut self) -> Result<(), ParseError<'a>> {
+    fn shift_all(&mut self) -> Result<(), ParseError> {
         loop {
             if self.stack.len() == 0 {
                 return Ok(());
             }
             if let Token::OpeningBracket(_) = *self.stack[self.stack.len() - 1] {
-                return Err(ParseError::MissionCommaError(MissionCommaError {
-                    token: (&*self.stack[self.stack.len() - 1]).clone(),
+                return Err(ParseError::MissingCommaError(MissingCommaError {
+                    data: (&*self.stack[self.stack.len() - 1]).get_error_token_data(),
                 }));
             }
             let last_token = self.stack.pop().unwrap();
@@ -380,38 +378,64 @@ impl<'a> Parser<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ParseError<'a> {
-    MissingCommaOrOpeningParenthesisError(MissingCommaOrOpeningParenthesisError<'a>),
-    MissionCommaError(MissionCommaError<'a>),
-    EmptyFormulaError(EmptyFormulaError),
-    MultipleFormulaError(MultipleFormulaError),
-    InvalidArgumentsNumberError(InvalidArgumentsNumberError<'a>),
+pub enum ParseError {
+    MissingCommaOrOpeningBracketError(MissingCommaOrOpeningBracketError),
+    MissingCommaError(MissingCommaError),
+    InvalidArgumentsNumberError(InvalidArgumentsNumberError),
+    EmptyFormulaError,
+    MultipleFormulaError,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseError::MissingCommaOrOpeningBracketError(err) => 
+                write!(
+                    f,
+                    "Missing comma or opening bracket at position {}. The token string is \"{}\".",
+                    err.data.position, err.data.string
+                ),
+            ParseError::MissingCommaError(err) =>
+                write!(
+                    f,
+                    "Missing comma error at position {}. The token string is \"{}\".",
+                    err.data.position, err.data.string
+                ),
+            ParseError::InvalidArgumentsNumberError(err) => write!(
+                f,
+                "Invalid number of arguments at position {}, expected {}, but actually {}. Token string is \"{}\".",
+                err.data.position, err.expected, err.actual, err.data.string
+            ),
+            ParseError::EmptyFormulaError => write!(f, "The formula is empty."),
+            ParseError::MultipleFormulaError => write!(f, "The formula is multiple."),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct MissingCommaOrOpeningParenthesisError<'a> {
-    token: Token<'a>,
+pub struct MissingCommaOrOpeningBracketError {
+    pub data: ErrorTokenData,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct MissionCommaError<'a> {
-    token: Token<'a>,
+pub struct MissingCommaError {
+    pub data: ErrorTokenData,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct EmptyFormulaError;
-
-#[derive(Debug, PartialEq)]
-pub struct MultipleFormulaError;
-
-#[derive(Debug, PartialEq)]
-pub struct InvalidArgumentsNumberError<'a> {
-    token: Token<'a>,
-    expected: usize,
-    actual: usize,
+pub struct InvalidArgumentsNumberError {
+    pub data: ErrorTokenData,
+    pub expected: usize,
+    pub actual: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
+pub struct ErrorTokenData {
+    pub string: String,
+    pub position: usize,
+}
+
+#[derive(Debug, PartialEq)]
 enum Token<'a> {
     Constant(TokenValue<f64>),
     Variable(TokenValue<String>),
@@ -422,11 +446,34 @@ enum Token<'a> {
     Comma(TokenValue<()>),
 }
 
+impl<'a> Token<'a> {
+    fn get_error_token_data(&self) -> ErrorTokenData {
+        match self {
+            Token::Constant(tv) => tv.get_error_token_data(),
+            Token::Variable(tv) => tv.get_error_token_data(),
+            Token::Function(tv) => tv.get_error_token_data(),
+            Token::Operator(tv) => tv.get_error_token_data(),
+            Token::OpeningBracket(tv) => tv.get_error_token_data(),
+            Token::CloseBracket(tv) => tv.get_error_token_data(),
+            Token::Comma(tv) => tv.get_error_token_data(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct TokenValue<T> {
     value: T,
     string: String,
     position: usize,
+}
+
+impl<T> TokenValue<T> {
+    fn get_error_token_data(&self) -> ErrorTokenData {
+        ErrorTokenData {
+            string: self.string.to_owned(),
+            position: self.position,
+        }
+    }
 }
 
 impl<'a> Operator {
@@ -656,7 +703,7 @@ mod tests {
             );
         }
         let expected_error = InvalidArgumentsNumberError {
-            token: create_plus_token(&settings),
+            data: create_plus_token(&settings).get_error_token_data(),
             expected: 2,
             actual: 1,
         };
@@ -744,11 +791,10 @@ mod tests {
             Rc::new(create_one_token()),
             Rc::new(create_log_token(&settings)),
         ];
-        let expected_error = ParseError::MissingCommaOrOpeningParenthesisError(
-            MissingCommaOrOpeningParenthesisError {
-                token: create_comma_token(),
-            },
-        );
+        let expected_error =
+            ParseError::MissingCommaOrOpeningBracketError(MissingCommaOrOpeningBracketError {
+                data: create_comma_token().get_error_token_data(),
+            });
         match parser.shift_until_opening_bracket(Rc::new(create_comma_token())) {
             Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
             Err(err) => assert_eq!(expected_error, err),
@@ -766,8 +812,8 @@ mod tests {
             Rc::new(create_one_token()),
             Rc::new(create_log_token(&settings)),
         ];
-        let expected_error = ParseError::MissionCommaError(MissionCommaError {
-            token: create_close_bracket_token(),
+        let expected_error = ParseError::MissingCommaError(MissingCommaError {
+            data: create_close_bracket_token().get_error_token_data(),
         });
         match parser.shift_until_opening_bracket(Rc::new(create_close_bracket_token())) {
             Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
@@ -789,7 +835,7 @@ mod tests {
             Rc::new(create_log_token(&settings)),
         ];
         let expected_error = ParseError::InvalidArgumentsNumberError(InvalidArgumentsNumberError {
-            token: create_log_token(&settings),
+            data: create_log_token(&settings).get_error_token_data(),
             expected: 2,
             actual: 1,
         });
@@ -845,8 +891,8 @@ mod tests {
             Rc::new(create_opening_bracket_token()),
             Rc::new(create_x_token()),
         ];
-        let expected_error = ParseError::MissionCommaError(MissionCommaError {
-            token: create_opening_bracket_token(),
+        let expected_error = ParseError::MissingCommaError(MissingCommaError {
+            data: create_opening_bracket_token().get_error_token_data(),
         });
         match parser.shift_all() {
             Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
@@ -872,7 +918,7 @@ mod tests {
         parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]);
         parser.stack = vec![Rc::new(create_plus_token(&settings))];
         let expected_error = ParseError::InvalidArgumentsNumberError(InvalidArgumentsNumberError {
-            token: create_plus_token(&settings),
+            data: create_plus_token(&settings).get_error_token_data(),
             expected: 2,
             actual: 1,
         });
@@ -973,7 +1019,7 @@ mod tests {
         parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]);
         parser.stack = vec![Rc::new(create_asterisk_token(&settings))];
         let expected_error = ParseError::InvalidArgumentsNumberError(InvalidArgumentsNumberError {
-            token: create_asterisk_token(&settings),
+            data: create_asterisk_token(&settings).get_error_token_data(),
             expected: 2,
             actual: 1,
         });
@@ -1024,7 +1070,7 @@ mod tests {
     #[test]
     fn test_parse_empty_formula_error() {
         let settings = settings::get_default_settings();
-        let expected_error = ParseError::EmptyFormulaError(EmptyFormulaError);
+        let expected_error = ParseError::EmptyFormulaError;
         match Parser::parse("", &settings) {
             Ok(actual_tree) => panic!(
                 "Expected {:?}, but {:?} was received.",
@@ -1037,7 +1083,7 @@ mod tests {
     #[test]
     fn multiple_formula_error() {
         let settings = settings::get_default_settings();
-        let expected_error = ParseError::MultipleFormulaError(MultipleFormulaError);
+        let expected_error = ParseError::MultipleFormulaError;
         match Parser::parse("x + 1 1 + 2", &settings) {
             Ok(actual_tree) => panic!(
                 "Expected {:?}, but {:?} was received.",
@@ -1165,6 +1211,51 @@ mod tests {
                 expression, err
             ),
         }
+    }
+    
+    #[test]
+    fn test_get_error_token_data() {
+        let settings = settings::get_default_settings();
+        let token = create_sin_token(&settings);
+        assert_eq!(ErrorTokenData {
+            string: String::from("sin"),
+            position: 0
+        }, token.get_error_token_data());
+    }
+
+    #[test]
+    fn test_parse_error_display() {
+        assert_eq!(
+            "Missing comma or opening bracket at position 5. The token string is \"sin\".",
+            format!("{}", ParseError::MissingCommaOrOpeningBracketError(MissingCommaOrOpeningBracketError {
+                data: ErrorTokenData {
+                    string: String::from("sin"),
+                    position: 5
+                }
+            }))
+        );
+        assert_eq!(
+            "Missing comma error at position 5. The token string is \"sin\".",
+            format!("{}", ParseError::MissingCommaError(MissingCommaError {
+                data: ErrorTokenData {
+                    string: String::from("sin"),
+                    position: 5
+                }
+            }))
+        );
+        assert_eq!(
+            "Invalid number of arguments at position 5, expected 2, but actually 1. Token string is \"log\".",
+            format!("{}", ParseError::InvalidArgumentsNumberError(InvalidArgumentsNumberError {
+                data: ErrorTokenData {
+                    string: String::from("log"),
+                    position: 5,
+                },
+                expected: 2,
+                actual: 1
+            }))
+        );
+        assert_eq!("The formula is empty.", format!("{}", ParseError::EmptyFormulaError));
+        assert_eq!("The formula is multiple.", format!("{}", ParseError::MultipleFormulaError));
     }
 
     fn create_one_token() -> Token<'static> {
