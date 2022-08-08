@@ -113,20 +113,24 @@ pub enum Associativity {
     Right,
 }
 
-pub struct FunctionConverter<'a> {
-    pub from: &'a Function,
-    pub to: &'a Function,
+pub struct Converter<'a> {
+    pub from: ConverterOperation<'a>,
+    pub to: ConverterOperation<'a>,
     pub is_conversion_possible_fn: fn(&'a [f64]) -> bool,
     pub convert_fn: fn(&'a [f64]) -> Vec<f64>,
 }
 
-impl<'a> FunctionConverter<'a> {
-    fn is_conversion_possible(&self, function: &'a Function, arguments: &'a [f64]) -> bool {
-        function == self.from && (self.is_conversion_possible_fn)(arguments)
+impl<'a> Converter<'a> {
+    fn is_conversion_possible(
+        &self,
+        operation: ConverterOperation<'a>,
+        arguments: &'a [f64],
+    ) -> bool {
+        operation == self.from && (self.is_conversion_possible_fn)(arguments)
     }
     fn convert(&self, arguments: &'a [f64]) -> ConvertOutputData<'a> {
         ConvertOutputData {
-            function: self.to,
+            operation: self.to.clone(),
             arguments: (self.convert_fn)(arguments),
         }
     }
@@ -134,8 +138,14 @@ impl<'a> FunctionConverter<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct ConvertOutputData<'a> {
-    pub function: &'a Function,
+    pub operation: ConverterOperation<'a>,
     pub arguments: Vec<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConverterOperation<'a> {
+    Operator(&'a Operator),
+    Function(&'a Function),
 }
 
 #[cfg(test)]
@@ -232,32 +242,38 @@ mod tests {
         fn test_is_conversion_possible() {
             let log_function = create_log_function();
             let ln_function = create_ln_function();
-            let converter = FunctionConverter {
-                from: &log_function,
-                to: &ln_function,
+            let converter = Converter {
+                from: ConverterOperation::Function(&log_function),
+                to: ConverterOperation::Function(&ln_function),
                 is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
                 convert_fn: |arguments| vec![arguments[1]],
             };
             let possible_arguments = vec![E + 0.0001, 10.0];
             let not_possible_arguments = vec![E + 0.01, 10.0];
-            assert!(converter.is_conversion_possible(&log_function, &possible_arguments));
-            assert!(!converter.is_conversion_possible(&ln_function, &not_possible_arguments));
+            assert!(converter.is_conversion_possible(
+                ConverterOperation::Function(&log_function),
+                &possible_arguments
+            ));
+            assert!(!converter.is_conversion_possible(
+                ConverterOperation::Function(&ln_function),
+                &not_possible_arguments
+            ));
         }
 
         #[test]
         fn test_convert() {
             let log_function = create_log_function();
             let ln_function = create_ln_function();
-            let converter = FunctionConverter {
-                from: &log_function,
-                to: &ln_function,
+            let converter = Converter {
+                from: ConverterOperation::Function(&log_function),
+                to: ConverterOperation::Function(&ln_function),
                 is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
                 convert_fn: |arguments| vec![arguments[1]],
             };
             let arguments = vec![E + 0.0001, 10.0];
             assert_eq!(
                 ConvertOutputData {
-                    function: &ln_function,
+                    operation: ConverterOperation::Function(&ln_function),
                     arguments: vec![10.0]
                 },
                 converter.convert(&arguments)
