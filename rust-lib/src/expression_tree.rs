@@ -174,7 +174,7 @@ impl Computable for ValueNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::{FunctionCollection, OperatorCollection, Settings};
+    use crate::settings::Settings;
 
     #[test]
     #[should_panic(expected = "Expression tree does not contain y variable.")]
@@ -190,20 +190,20 @@ mod tests {
         let tree = create_test_tree_with_variables(&settings);
         let expected_tree = ExpressionTree {
             root: Node::Operator(OperationNode {
-                operation: settings.operators.find_binary_by_name("+").unwrap(),
+                operation: settings.find_binary_operator_by_name("+").unwrap(),
                 arguments: vec![
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_binary_by_name("-").unwrap(),
+                        operation: settings.find_binary_operator_by_name("-").unwrap(),
                         arguments: vec![
                             Node::Value(ValueNode::Constant(2.0)),
                             Node::Value(ValueNode::Constant(1.0)),
                         ],
                     }),
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_binary_by_name("*").unwrap(),
+                        operation: settings.find_binary_operator_by_name("*").unwrap(),
                         arguments: vec![
                             Node::Function(OperationNode {
-                                operation: settings.functions.find_by_name("sin").unwrap(),
+                                operation: settings.find_function_by_name("sin").unwrap(),
                                 arguments: vec![Node::Value(ValueNode::Constant(2.0))],
                             }),
                             Node::Value(ValueNode::Variable(String::from("x2"))),
@@ -235,7 +235,7 @@ mod tests {
     fn test_operation_node_compute() -> Result<(), ComputeError> {
         let settings = Settings::default();
         let actual = OperationNode {
-            operation: settings.operators.find_binary_by_name("+").unwrap(),
+            operation: settings.find_binary_operator_by_name("+").unwrap(),
             arguments: vec![
                 Node::Value(ValueNode::Constant(1.0)),
                 Node::Value(ValueNode::Constant(2.0)),
@@ -257,7 +257,7 @@ mod tests {
     fn test_node_operator_compute() -> Result<(), ComputeError> {
         let settings = Settings::default();
         let actual = Node::Operator(OperationNode {
-            operation: settings.operators.find_binary_by_name("+").unwrap(),
+            operation: settings.find_binary_operator_by_name("+").unwrap(),
             arguments: vec![
                 Node::Value(ValueNode::Constant(1.0)),
                 Node::Value(ValueNode::Constant(2.0)),
@@ -272,7 +272,7 @@ mod tests {
     fn test_node_function_compute() -> Result<(), ComputeError> {
         let settings = Settings::default();
         let actual = Node::Function(OperationNode {
-            operation: settings.functions.find_by_name("sin").unwrap(),
+            operation: settings.find_function_by_name("sin").unwrap(),
             arguments: vec![Node::Value(ValueNode::Constant(0.5))],
         })
         .compute()?;
@@ -315,9 +315,9 @@ mod tests {
         tree.simplify();
         let expected_tree = ExpressionTree {
             root: Node::Function(OperationNode {
-                operation: settings.functions.find_by_name("sin").unwrap(),
+                operation: settings.find_function_by_name("sin").unwrap(),
                 arguments: vec![Node::Operator(OperationNode {
-                    operation: settings.operators.find_binary_by_name("+").unwrap(),
+                    operation: settings.find_binary_operator_by_name("+").unwrap(),
                     arguments: vec![
                         Node::Value(ValueNode::Variable(String::from("x"))),
                         Node::Value(ValueNode::Constant(14.0)),
@@ -332,20 +332,20 @@ mod tests {
     fn create_test_tree_with_variables<'a>(settings: &'a Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
-                operation: settings.operators.find_binary_by_name("+").unwrap(),
+                operation: settings.find_binary_operator_by_name("+").unwrap(),
                 arguments: vec![
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_binary_by_name("-").unwrap(),
+                        operation: settings.find_binary_operator_by_name("-").unwrap(),
                         arguments: vec![
                             Node::Value(ValueNode::Variable(String::from("x1"))),
                             Node::Value(ValueNode::Constant(1.0)),
                         ],
                     }),
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_binary_by_name("*").unwrap(),
+                        operation: settings.find_binary_operator_by_name("*").unwrap(),
                         arguments: vec![
                             Node::Function(OperationNode {
-                                operation: settings.functions.find_by_name("sin").unwrap(),
+                                operation: settings.find_function_by_name("sin").unwrap(),
                                 arguments: vec![Node::Value(ValueNode::Variable(String::from(
                                     "x1",
                                 )))],
@@ -362,20 +362,20 @@ mod tests {
     fn create_test_tree_without_variables<'a>(settings: &'a Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
-                operation: settings.operators.find_binary_by_name("+").unwrap(),
+                operation: settings.find_binary_operator_by_name("+").unwrap(),
                 arguments: vec![
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_binary_by_name("*").unwrap(),
+                        operation: settings.find_binary_operator_by_name("*").unwrap(),
                         arguments: vec![
                             Node::Value(ValueNode::Constant(2.0)),
                             Node::Value(ValueNode::Constant(3.0)),
                         ],
                     }),
                     Node::Operator(OperationNode {
-                        operation: settings.operators.find_binary_by_name("*").unwrap(),
+                        operation: settings.find_binary_operator_by_name("*").unwrap(),
                         arguments: vec![
                             Node::Function(OperationNode {
-                                operation: settings.functions.find_by_name("sin").unwrap(),
+                                operation: settings.find_function_by_name("sin").unwrap(),
                                 arguments: vec![Node::Value(ValueNode::Constant(5.0))],
                             }),
                             Node::Value(ValueNode::Constant(10.0)),
@@ -390,17 +390,17 @@ mod tests {
     fn create_tree_to_simplify<'a>(settings: &'a Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Function(OperationNode {
-                operation: settings.functions.find_by_name("sin").unwrap(),
+                operation: settings.find_function_by_name("sin").unwrap(),
                 arguments: vec![Node::Operator(OperationNode {
-                    operation: settings.operators.find_binary_by_name("+").unwrap(),
+                    operation: settings.find_binary_operator_by_name("+").unwrap(),
                     arguments: vec![
                         Node::Value(ValueNode::Variable(String::from("x"))),
                         Node::Operator(OperationNode {
-                            operation: settings.operators.find_binary_by_name("*").unwrap(),
+                            operation: settings.find_binary_operator_by_name("*").unwrap(),
                             arguments: vec![
                                 Node::Value(ValueNode::Constant(2.0)),
                                 Node::Operator(OperationNode {
-                                    operation: settings.operators.find_binary_by_name("+").unwrap(),
+                                    operation: settings.find_binary_operator_by_name("+").unwrap(),
                                     arguments: vec![
                                         Node::Value(ValueNode::Constant(3.0)),
                                         Node::Value(ValueNode::Constant(4.0)),

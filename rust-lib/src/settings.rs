@@ -10,6 +10,30 @@ pub struct Settings {
 }
 
 impl Settings {
+    pub fn find_function_by_name(&self, name: &str) -> Option<Rc<Function>> {
+        for function in &self.functions {
+            if function.get_name() == name {
+                return Some(Rc::clone(function));
+            }
+        }
+        None
+    }
+    pub fn find_unary_operator_by_name(&self, name: &str) -> Option<Rc<Operator>> {
+        for operator in &self.operators {
+            if operator.get_name() == name && operator.arguments_number == 1 {
+                return Some(Rc::clone(operator));
+            }
+        }
+        None
+    }
+    pub fn find_binary_operator_by_name(&self, name: &str) -> Option<Rc<Operator>> {
+        for operator in &self.operators {
+            if operator.get_name() == name && operator.arguments_number == 2 {
+                return Some(Rc::clone(operator));
+            }
+        }
+        None
+    }
     pub fn default() -> Settings {
         let mut settings = Settings {
             operators: vec![],
@@ -239,11 +263,11 @@ impl Settings {
         ];
     }
     pub fn set_default_converters(&mut self) {
-        let circumflex = self.operators.find_binary_by_name("^").unwrap();
-        let log = self.functions.find_by_name("log").unwrap();
-        let ln = self.functions.find_by_name("ln").unwrap();
-        let exp = self.functions.find_by_name("exp").unwrap();
-        let sqrt = self.functions.find_by_name("sqrt").unwrap();
+        let circumflex = self.find_binary_operator_by_name("^").unwrap();
+        let log = self.find_function_by_name("log").unwrap();
+        let ln = self.find_function_by_name("ln").unwrap();
+        let exp = self.find_function_by_name("exp").unwrap();
+        let sqrt = self.find_function_by_name("sqrt").unwrap();
         self.converters = vec![
             Converter {
                 from: ConverterOperation::Function(Rc::clone(&ln)),
@@ -285,45 +309,6 @@ impl Settings {
     }
 }
 
-pub trait FunctionCollection {
-    fn find_by_name(&self, name: &str) -> Option<Rc<Function>>;
-}
-
-impl FunctionCollection for [Rc<Function>] {
-    fn find_by_name(&self, name: &str) -> Option<Rc<Function>> {
-        for function in self {
-            if function.get_name() == name {
-                return Some(Rc::clone(function));
-            }
-        }
-        None
-    }
-}
-
-pub trait OperatorCollection {
-    fn find_unary_by_name(&self, name: &str) -> Option<Rc<Operator>>;
-    fn find_binary_by_name(&self, name: &str) -> Option<Rc<Operator>>;
-}
-
-impl OperatorCollection for [Rc<Operator>] {
-    fn find_unary_by_name(&self, name: &str) -> Option<Rc<Operator>> {
-        for operator in self {
-            if operator.get_name() == name && operator.arguments_number == 1 {
-                return Some(Rc::clone(operator));
-            }
-        }
-        None
-    }
-    fn find_binary_by_name(&self, name: &str) -> Option<Rc<Operator>> {
-        for operator in self {
-            if operator.get_name() == name && operator.arguments_number == 2 {
-                return Some(Rc::clone(operator));
-            }
-        }
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,9 +318,9 @@ mod tests {
         let settings = Settings::default();
         assert_eq!(
             settings.operators[5],
-            settings.operators.find_unary_by_name("+").unwrap()
+            settings.find_unary_operator_by_name("+").unwrap()
         );
-        assert_eq!(None, settings.operators.find_unary_by_name("&"));
+        assert_eq!(None, settings.find_unary_operator_by_name("&"));
     }
 
     #[test]
@@ -343,9 +328,9 @@ mod tests {
         let settings = Settings::default();
         assert_eq!(
             settings.operators[0],
-            settings.operators.find_binary_by_name("+").unwrap()
+            settings.find_binary_operator_by_name("+").unwrap()
         );
-        assert_eq!(None, settings.operators.find_binary_by_name("&"));
+        assert_eq!(None, settings.find_binary_operator_by_name("&"));
     }
 
     #[test]
@@ -353,8 +338,8 @@ mod tests {
         let settings = Settings::default();
         assert_eq!(
             settings.functions[0],
-            settings.functions.find_by_name("abs").unwrap()
+            settings.find_function_by_name("abs").unwrap()
         );
-        assert_eq!(None, settings.functions.find_by_name("fn"));
+        assert_eq!(None, settings.find_function_by_name("fn"));
     }
 }
