@@ -64,7 +64,6 @@ pub struct Function {
     pub name: String,
     pub arguments_number: usize,
     pub complexity: u32,
-    pub io_only: bool,
     pub compute_fn: fn(&[f64]) -> f64,
 }
 
@@ -91,7 +90,6 @@ impl fmt::Debug for Function {
             .field("name", &self.name)
             .field("arguments_number", &self.arguments_number)
             .field("complexity", &self.complexity)
-            .field("io_only", &self.io_only)
             .finish()
     }
 }
@@ -121,9 +119,28 @@ pub struct Converter {
     pub convert_fn: fn(&[f64]) -> Vec<f64>,
 }
 
+impl fmt::Debug for Converter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Converter")
+            .field("from", &self.from)
+            .field("to", &self.to)
+            .finish()
+    }
+}
+
+impl PartialEq for Converter {
+    fn eq(&self, other: &Converter) -> bool {
+        format!("{:?}", self) == format!("{:?}", other)
+    }
+}
+
 impl Converter {
-    pub fn is_conversion_possible(&self, operation: ConverterOperation, arguments: &[f64]) -> bool {
-        operation == self.from && (self.is_conversion_possible_fn)(arguments)
+    pub fn is_conversion_possible(
+        &self,
+        operation: &ConverterOperation,
+        arguments: &[f64],
+    ) -> bool {
+        *operation == self.from && (self.is_conversion_possible_fn)(arguments)
     }
     pub fn convert(&self, arguments: &[f64]) -> ConvertOutputData {
         ConvertOutputData {
@@ -196,27 +213,26 @@ mod tests {
 
     mod function_tests {
         use super::*;
-        use std::f64::consts::E;
 
         #[test]
         fn test_debug() {
-            let test_function = create_sin_function();
+            let test_function = create_test_function();
             assert_eq!(
-                "Function { name: \"sin\", arguments_number: 1, complexity: 1, io_only: false }",
+                "Function { name: \"sin\", arguments_number: 1, complexity: 1 }",
                 format!("{:?}", test_function)
             );
         }
 
         #[test]
         fn test_display() {
-            let test_function = create_sin_function();
+            let test_function = create_test_function();
             assert_eq!("sin", format!("{}", test_function));
         }
 
         #[test]
         fn test_eq() {
-            let test_function1 = create_sin_function();
-            let mut test_function2 = create_sin_function();
+            let test_function1 = create_test_function();
+            let mut test_function2 = create_test_function();
             assert!(test_function1 == test_function2);
             test_function2.name = String::from("cos");
             assert!(test_function1 != test_function2);
@@ -224,49 +240,73 @@ mod tests {
 
         #[test]
         fn test_compute() {
-            let test_function = create_sin_function();
+            let test_function = create_test_function();
             assert_eq!(2.0_f64.sin(), test_function.compute(&[2.0]));
         }
 
         #[test]
         #[should_panic(expected = "The function `sin` expected 1 arguments but received 2.")]
         fn test_compute_panic() {
-            let test_function = create_sin_function();
+            let test_function = create_test_function();
             assert_eq!(2.0_f64.sin(), test_function.compute(&[1.0, 2.0]));
+        }
+
+        fn create_test_function() -> Function {
+            Function {
+                name: String::from("sin"),
+                arguments_number: 1,
+                complexity: 1,
+                compute_fn: |arguments| arguments[0].sin(),
+            }
+        }
+    }
+
+    mod converter_tests {
+        use super::*;
+        use std::f64::consts::E;
+
+        #[test]
+        fn test_debug() {
+            let test_converter = create_log_to_ln_converter();
+            assert_eq!(
+                format!(
+                    "Converter {{ from: {:?}, to: {:?} }}",
+                    ConverterOperation::Function(Rc::new(create_log_function())),
+                    ConverterOperation::Function(Rc::new(create_ln_function())),
+                ),
+                format!("{:?}", test_converter)
+            );
+        }
+        #[test]
+        fn test_eq() {
+            let test_converter1 = create_log_to_ln_converter();
+            let mut test_converter2 = create_log_to_ln_converter();
+            assert!(test_converter1 == test_converter2);
+            test_converter2.from = ConverterOperation::Function(Rc::new(create_ln_function()));
+            assert!(test_converter1 != test_converter2);
         }
 
         #[test]
         fn test_is_conversion_possible() {
             let log_function = Rc::new(create_log_function());
             let ln_function = Rc::new(create_ln_function());
-            let converter = Converter {
-                from: ConverterOperation::Function(Rc::clone(&log_function)),
-                to: ConverterOperation::Function(Rc::clone(&ln_function)),
-                is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
-                convert_fn: |arguments| vec![arguments[1]],
-            };
+            let converter = create_log_to_ln_converter();
             let possible_arguments = vec![E + 0.0001, 10.0];
             let not_possible_arguments = vec![E + 0.01, 10.0];
             assert!(converter.is_conversion_possible(
-                ConverterOperation::Function(Rc::clone(&log_function)),
+                &ConverterOperation::Function(Rc::clone(&log_function)),
                 &possible_arguments
             ));
             assert!(!converter.is_conversion_possible(
-                ConverterOperation::Function(Rc::clone(&ln_function)),
+                &ConverterOperation::Function(Rc::clone(&ln_function)),
                 &not_possible_arguments
             ));
         }
 
         #[test]
         fn test_convert() {
-            let log_function = Rc::new(create_log_function());
             let ln_function = Rc::new(create_ln_function());
-            let converter = Converter {
-                from: ConverterOperation::Function(Rc::clone(&log_function)),
-                to: ConverterOperation::Function(Rc::clone(&ln_function)),
-                is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
-                convert_fn: |arguments| vec![arguments[1]],
-            };
+            let converter = create_log_to_ln_converter();
             let arguments = vec![E + 0.0001, 10.0];
             assert_eq!(
                 ConvertOutputData {
@@ -277,22 +317,11 @@ mod tests {
             );
         }
 
-        fn create_sin_function() -> Function {
-            Function {
-                name: String::from("sin"),
-                arguments_number: 1,
-                complexity: 1,
-                io_only: false,
-                compute_fn: |arguments| arguments[0].sin(),
-            }
-        }
-
         fn create_log_function() -> Function {
             Function {
                 name: String::from("log"),
                 arguments_number: 2,
                 complexity: 1,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].log(arguments[1]),
             }
         }
@@ -302,8 +331,16 @@ mod tests {
                 name: String::from("ln"),
                 arguments_number: 1,
                 complexity: 1,
-                io_only: true,
                 compute_fn: |arguments| arguments[0].ln(),
+            }
+        }
+
+        fn create_log_to_ln_converter() -> Converter {
+            Converter {
+                from: ConverterOperation::Function(Rc::new(create_log_function())),
+                to: ConverterOperation::Function(Rc::new(create_ln_function())),
+                is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
+                convert_fn: |arguments| vec![arguments[1]],
             }
         }
     }

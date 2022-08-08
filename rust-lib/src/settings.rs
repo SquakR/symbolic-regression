@@ -1,5 +1,7 @@
 //! Module with model settings.
-use crate::types::{Associativity, Converter, ConverterOperation, Function, Operation, Operator};
+use crate::types::{
+    Associativity, ConvertOutputData, Converter, ConverterOperation, Function, Operation, Operator,
+};
 use std::f64::{consts::E, consts::PI, NAN};
 use std::rc::Rc;
 
@@ -30,6 +32,27 @@ impl Settings {
         for operator in &self.operators {
             if operator.get_name() == name && operator.arguments_number == 2 {
                 return Some(Rc::clone(operator));
+            }
+        }
+        None
+    }
+    pub fn find_converters(&self, operation: &ConverterOperation) -> Vec<&Converter> {
+        let mut converters = vec![];
+        for converter in &self.converters {
+            if converter.from == *operation {
+                converters.push(converter)
+            }
+        }
+        converters
+    }
+    pub fn convert(
+        &self,
+        operation: &ConverterOperation,
+        arguments: &[f64],
+    ) -> Option<ConvertOutputData> {
+        for converter in self.find_converters(operation) {
+            if converter.is_conversion_possible(operation, arguments) {
+                return Some(converter.convert(arguments));
             }
         }
         None
@@ -111,126 +134,108 @@ impl Settings {
                 name: String::from("abs"),
                 arguments_number: 1,
                 complexity: 3,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].abs(),
             }),
             Rc::new(Function {
                 name: String::from("log"),
                 arguments_number: 2,
                 complexity: 4,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].log(arguments[1]),
             }),
             Rc::new(Function {
                 name: String::from("sin"),
                 arguments_number: 1,
                 complexity: 4,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].sin(),
             }),
             Rc::new(Function {
                 name: String::from("arcsin"),
                 arguments_number: 1,
                 complexity: 5,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].asin(),
             }),
             Rc::new(Function {
                 name: String::from("cos"),
                 arguments_number: 1,
                 complexity: 4,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].cos(),
             }),
             Rc::new(Function {
                 name: String::from("arccos"),
                 arguments_number: 1,
                 complexity: 5,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].acos(),
             }),
             Rc::new(Function {
                 name: String::from("tan"),
                 arguments_number: 1,
                 complexity: 5,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].tan(),
             }),
             Rc::new(Function {
                 name: String::from("arctan"),
                 arguments_number: 1,
                 complexity: 6,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].atan(),
             }),
             Rc::new(Function {
                 name: String::from("cot"),
                 arguments_number: 1,
                 complexity: 5,
-                io_only: false,
                 compute_fn: |arguments| 1.0 / arguments[0].tan(),
             }),
             Rc::new(Function {
                 name: String::from("arccot"),
                 arguments_number: 1,
                 complexity: 6,
-                io_only: false,
                 compute_fn: |arguments| PI / 2.0 - arguments[0].atan(),
             }),
             Rc::new(Function {
                 name: String::from("sinh"),
                 arguments_number: 1,
                 complexity: 5,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].sinh(),
             }),
             Rc::new(Function {
                 name: String::from("arsinh"),
                 arguments_number: 1,
                 complexity: 6,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].asinh(),
             }),
             Rc::new(Function {
                 name: String::from("cosh"),
                 arguments_number: 1,
                 complexity: 5,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].cosh(),
             }),
             Rc::new(Function {
                 name: String::from("arcosh"),
                 arguments_number: 1,
                 complexity: 6,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].acosh(),
             }),
             Rc::new(Function {
                 name: String::from("tanh"),
                 arguments_number: 1,
                 complexity: 6,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].tanh(),
             }),
             Rc::new(Function {
                 name: String::from("artanh"),
                 arguments_number: 1,
                 complexity: 7,
-                io_only: false,
                 compute_fn: |arguments| arguments[0].atanh(),
             }),
             Rc::new(Function {
                 name: String::from("coth"),
                 arguments_number: 1,
                 complexity: 6,
-                io_only: false,
                 compute_fn: |arguments| 1.0 / arguments[0].tanh(),
             }),
             Rc::new(Function {
                 name: String::from("arcoth"),
                 arguments_number: 1,
                 complexity: 7,
-                io_only: false,
                 compute_fn: |arguments| {
                     if arguments[0] < -1.0 || arguments[0] > 1.0 {
                         ((arguments[0] + 1.0) / (arguments[0] - 1.0)).ln() * 0.5
@@ -243,21 +248,18 @@ impl Settings {
                 name: String::from("ln"),
                 arguments_number: 1,
                 complexity: 4,
-                io_only: true,
                 compute_fn: |arguments| arguments[0].ln(),
             }),
             Rc::new(Function {
                 name: String::from("exp"),
                 arguments_number: 1,
                 complexity: 3,
-                io_only: true,
                 compute_fn: |arguments| arguments[0].exp(),
             }),
             Rc::new(Function {
                 name: String::from("sqrt"),
                 arguments_number: 1,
                 complexity: 3,
-                io_only: true,
                 compute_fn: |arguments| arguments[0].sqrt(),
             }),
         ];
@@ -341,5 +343,63 @@ mod tests {
             settings.find_function_by_name("abs").unwrap()
         );
         assert_eq!(None, settings.find_function_by_name("fn"));
+    }
+
+    #[test]
+    fn test_find_converters() {
+        let settings = Settings::default();
+        assert_eq!(
+            vec![&settings.converters[4], &settings.converters[5]],
+            settings.find_converters(&ConverterOperation::Operator(
+                settings.find_binary_operator_by_name("^").unwrap()
+            ))
+        );
+        let empty_vec: Vec<&Converter> = vec![];
+        assert_eq!(
+            empty_vec,
+            settings.find_converters(&ConverterOperation::Operator(
+                settings.find_binary_operator_by_name("+").unwrap()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_convert_log_to_ln() {
+        let settings = Settings::default();
+        let expected_output_data = ConvertOutputData {
+            operation: ConverterOperation::Function(settings.find_function_by_name("ln").unwrap()),
+            arguments: vec![10.0],
+        };
+        match settings.convert(
+            &ConverterOperation::Function(settings.find_function_by_name("log").unwrap()),
+            &vec![E + 0.0001, 10.0],
+        ) {
+            Some(actual_output_data) => assert_eq!(expected_output_data, actual_output_data),
+            None => panic!(
+                "Expected {:?}, but None was received.",
+                expected_output_data
+            ),
+        }
+    }
+
+    #[test]
+    fn test_convert_pow_to_sqrt() {
+        let settings = Settings::default();
+        let expected_output_data = ConvertOutputData {
+            operation: ConverterOperation::Operator(
+                settings.find_binary_operator_by_name("^").unwrap(),
+            ),
+            arguments: vec![2.0, 0.5],
+        };
+        match settings.convert(
+            &ConverterOperation::Function(settings.find_function_by_name("sqrt").unwrap()),
+            &vec![2.0],
+        ) {
+            Some(actual_output_data) => assert_eq!(expected_output_data, actual_output_data),
+            None => panic!(
+                "Expected {:?}, but None was received.",
+                expected_output_data
+            ),
+        }
     }
 }
