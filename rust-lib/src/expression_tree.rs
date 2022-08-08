@@ -133,12 +133,11 @@ impl<T: Operation> Computable for OperationNode<T> {
     }
     fn simplify(&mut self) -> () {
         for argument in self.arguments.iter_mut() {
-            let mut computation_result: Option<Result<f64, ComputeError>> = None;
-            match argument {
-                Node::Operator(operator_node) => computation_result = Some(operator_node.compute()),
-                Node::Function(function_node) => computation_result = Some(function_node.compute()),
-                _ => {}
-            }
+            let computation_result = match argument {
+                Node::Operator(operator_node) => Some(operator_node.compute()),
+                Node::Function(function_node) => Some(function_node.compute()),
+                _ => None,
+            };
             if let Some(result) = computation_result {
                 match result {
                     Ok(value) => *argument = Node::Value(ValueNode::Constant(value)),

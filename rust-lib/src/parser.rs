@@ -113,15 +113,8 @@ impl<'a> Parser<'a> {
         position: usize,
         is_next_operator_unary: bool,
     ) -> Option<Token> {
-        if let Some(operation_token) =
-            self.recognize_operation_string(string, position, is_next_operator_unary)
-        {
-            return Some(operation_token);
-        }
-        if let Some(function_token) = Parser::recognize_service_string(string, position) {
-            return Some(function_token);
-        }
-        None
+        self.recognize_operation_string(string, position, is_next_operator_unary)
+            .or(Parser::recognize_service_string(string, position))
     }
     fn recognize_operation_string(
         &self,
@@ -1081,7 +1074,7 @@ mod tests {
     }
 
     #[test]
-    fn multiple_formula_error() {
+    fn test_multiple_formula_error() {
         let settings = Settings::default();
         let expected_error = ParseError::MultipleFormulaError;
         match Parser::parse("x + 1 1 + 2", &settings) {
