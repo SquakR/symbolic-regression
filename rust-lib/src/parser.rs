@@ -9,11 +9,11 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 
-impl<'a> ExpressionTree<'a> {
+impl<'a> ExpressionTree {
     pub fn parse(
         expression: &str,
         settings: &'a Settings,
-    ) -> Result<ExpressionTree<'a>, ParseError> {
+    ) -> Result<ExpressionTree, ParseError> {
         Parser::parse(expression, settings)
     }
 }
@@ -21,14 +21,14 @@ impl<'a> ExpressionTree<'a> {
 struct Parser<'a> {
     expression: String,
     settings: &'a Settings,
-    tokens: Vec<Rc<Token<'a>>>,
-    queue: VecDeque<Node<'a>>,
-    stack: Vec<Rc<Token<'a>>>,
+    tokens: Vec<Rc<Token>>,
+    queue: VecDeque<Node>,
+    stack: Vec<Rc<Token>>,
     variables: Vec<String>,
 }
 
 impl<'a> Parser<'a> {
-    fn parse(expression: &str, settings: &'a Settings) -> Result<ExpressionTree<'a>, ParseError> {
+    fn parse(expression: &str, settings: &'a Settings) -> Result<ExpressionTree, ParseError> {
         if expression.len() == 0 {
             return Err(ParseError::EmptyFormulaError);
         }
@@ -93,7 +93,7 @@ impl<'a> Parser<'a> {
             )));
         }
     }
-    fn recognize_value_string(string: &str, position: usize) -> Token<'a> {
+    fn recognize_value_string(string: &str, position: usize) -> Token {
         match string.parse::<f64>() {
             Ok(constant) => Token::Constant(TokenValue {
                 value: constant,
@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
         string: &str,
         position: usize,
         is_next_operator_unary: bool,
-    ) -> Option<Token<'a>> {
+    ) -> Option<Token> {
         if let Some(operation_token) =
             self.recognize_operation_string(string, position, is_next_operator_unary)
         {
@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
         string: &str,
         position: usize,
         is_next_operator_unary: bool,
-    ) -> Option<Token<'a>> {
+    ) -> Option<Token> {
         let operator_option = if is_next_operator_unary {
             self.settings.operators.find_unary_by_name(string)
         } else {
@@ -160,7 +160,7 @@ impl<'a> Parser<'a> {
             _ => false,
         }
     }
-    fn recognize_service_string(string: &str, position: usize) -> Option<Token<'a>> {
+    fn recognize_service_string(string: &str, position: usize) -> Option<Token> {
         match string {
             "(" => Some(Token::OpeningBracket(TokenValue {
                 value: (),
@@ -210,13 +210,13 @@ impl<'a> Parser<'a> {
         self.shift_all()?;
         Ok(())
     }
-    fn handle_constant(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
+    fn handle_constant(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         match self.push_token(token) {
             Err(err) => Err(ParseError::InvalidArgumentsNumberError(err)),
             Ok(_) => Ok(()),
         }
     }
-    fn handle_variable(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
+    fn handle_variable(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         let value = match &*token {
             Token::Variable(token_value) => token_value.value.to_owned(),
             _ => unreachable!(),
@@ -229,13 +229,13 @@ impl<'a> Parser<'a> {
             Ok(_) => Ok(()),
         }
     }
-    fn handle_function(&mut self, token: Rc<Token<'a>>) {
+    fn handle_function(&mut self, token: Rc<Token>) {
         self.stack.push(token);
     }
-    fn handle_comma(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
+    fn handle_comma(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         self.shift_until_opening_bracket(token)
     }
-    fn handle_operator(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
+    fn handle_operator(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         let value = match &*token {
             Token::Operator(token_value) => token_value.value.to_owned(),
             _ => unreachable!(),
@@ -260,10 +260,10 @@ impl<'a> Parser<'a> {
         self.stack.push(token);
         Ok(())
     }
-    fn handle_opening_bracket(&mut self, token: Rc<Token<'a>>) {
+    fn handle_opening_bracket(&mut self, token: Rc<Token>) {
         self.stack.push(token);
     }
-    fn handle_close_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
+    fn handle_close_bracket(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         self.shift_until_opening_bracket(token)?;
         self.stack.pop();
         if self.stack.len() > 0 {
@@ -276,7 +276,7 @@ impl<'a> Parser<'a> {
         }
         Ok(())
     }
-    fn push_token(&mut self, token: Rc<Token<'a>>) -> Result<(), InvalidArgumentsNumberError> {
+    fn push_token(&mut self, token: Rc<Token>) -> Result<(), InvalidArgumentsNumberError> {
         match &*token {
             Token::Constant(token_value) => Ok(self
                 .queue
@@ -298,7 +298,7 @@ impl<'a> Parser<'a> {
                     .into_iter()
                     .collect::<Vec<Node>>();
                 let node = Node::Function(OperationNode {
-                    operation: token_value.value,
+                    operation: Rc::clone(&token_value.value),
                     arguments,
                 });
                 Ok(self.queue.push_back(node))
@@ -317,7 +317,7 @@ impl<'a> Parser<'a> {
                     .into_iter()
                     .collect::<Vec<Node>>();
                 let node = Node::Operator(OperationNode {
-                    operation: token_value.value,
+                    operation: Rc::clone(&token_value.value),
                     arguments,
                 });
                 Ok(self.queue.push_back(node))
@@ -325,7 +325,7 @@ impl<'a> Parser<'a> {
             _ => Ok(()),
         }
     }
-    fn shift_until_opening_bracket(&mut self, token: Rc<Token<'a>>) -> Result<(), ParseError> {
+    fn shift_until_opening_bracket(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         let mut tokens = VecDeque::new();
         loop {
             if self.stack.len() == 0 {
@@ -436,17 +436,17 @@ pub struct ErrorTokenData {
 }
 
 #[derive(Debug, PartialEq)]
-enum Token<'a> {
+enum Token {
     Constant(TokenValue<f64>),
     Variable(TokenValue<String>),
-    Function(TokenValue<&'a Function>),
-    Operator(TokenValue<&'a Operator>),
+    Function(TokenValue<Rc<Function>>),
+    Operator(TokenValue<Rc<Operator>>),
     OpeningBracket(TokenValue<()>),
     CloseBracket(TokenValue<()>),
     Comma(TokenValue<()>),
 }
 
-impl<'a> Token<'a> {
+impl Token {
     fn get_error_token_data(&self) -> ErrorTokenData {
         match self {
             Token::Constant(tv) => tv.get_error_token_data(),
@@ -492,20 +492,20 @@ impl<'a> Operator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings;
+    use crate::settings::Settings;
 
     #[test]
     fn test_operator_is_computed_before() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let plus = settings.operators.find_binary_by_name("+").unwrap();
         let minus = settings.operators.find_binary_by_name("-").unwrap();
         let asterisk = settings.operators.find_binary_by_name("*").unwrap();
         let slash = settings.operators.find_binary_by_name("/").unwrap();
         let circumflex = settings.operators.find_binary_by_name("^").unwrap();
-        assert!(plus.is_computed_before(plus));
-        assert!(plus.is_computed_before(minus));
-        assert!(!plus.is_computed_before(asterisk));
-        assert!(circumflex.is_computed_before(slash));
+        assert!(plus.is_computed_before(&*plus));
+        assert!(plus.is_computed_before(&*minus));
+        assert!(!plus.is_computed_before(&*asterisk));
+        assert!(circumflex.is_computed_before(&*slash));
     }
 
     #[test]
@@ -530,7 +530,7 @@ mod tests {
 
     #[test]
     fn test_is_next_operator_unary() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         assert!(parser.is_next_operator_unary());
         parser.tokens = vec![Rc::new(create_plus_token(&settings))];
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_recognize_string_unary_operator() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let parser = Parser::new("", &settings);
         let expected_token = Token::Operator(TokenValue {
             value: settings.operators.find_unary_by_name("-").unwrap(),
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn test_recognize_string_binary_operator() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let parser = Parser::new("", &settings);
         let expected_token = Token::Operator(TokenValue {
             value: settings.operators.find_binary_by_name("-").unwrap(),
@@ -573,7 +573,7 @@ mod tests {
 
     #[test]
     fn test_recognize_string_function() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let parser = Parser::new("", &settings);
         let expected_token = Token::Function(TokenValue {
             value: settings.functions.find_by_name("sin").unwrap(),
@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_recognize_string_service() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let parser = Parser::new("", &settings);
         let expected_token = Token::OpeningBracket(TokenValue {
             value: (),
@@ -603,7 +603,7 @@ mod tests {
 
     #[test]
     fn test_recognize_string_none() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let parser = Parser::new("", &settings);
         if let Some(actual_token) = parser.recognize_string("unknown", 5, false) {
             panic!("Expected None but got {:?}", actual_token)
@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     fn test_perform_lexical_analysis() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("log(2.0, x) + cos(-1.0) - x", &settings);
         parser.perform_lexical_analysis();
         assert_eq!(
@@ -694,7 +694,7 @@ mod tests {
 
     #[test]
     fn test_push_token() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         if let Err(err) = parser.push_token(Rc::new(create_one_token())) {
             panic!(
@@ -746,7 +746,7 @@ mod tests {
 
     #[test]
     fn test_shift_until_opening_bracket() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![
             Node::Value(ValueNode::Constant(1.0)),
@@ -785,7 +785,7 @@ mod tests {
 
     #[test]
     fn test_shift_until_opening_bracket_comma() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.stack = vec![
             Rc::new(create_one_token()),
@@ -806,7 +806,7 @@ mod tests {
 
     #[test]
     fn test_shift_until_opening_bracket_close_bracket() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.stack = vec![
             Rc::new(create_one_token()),
@@ -826,7 +826,7 @@ mod tests {
 
     #[test]
     fn test_shift_until_opening_bracket_invalid_arguments_number() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]);
         parser.stack = vec![
@@ -858,7 +858,7 @@ mod tests {
 
     #[test]
     fn test_shift_all() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.stack = vec![
             Rc::new(create_plus_token(&settings)),
@@ -884,7 +884,7 @@ mod tests {
 
     #[test]
     fn test_shift_all_opening_bracket() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.stack = vec![
             Rc::new(create_one_token()),
@@ -913,7 +913,7 @@ mod tests {
 
     #[test]
     fn test_shift_all_invalid_arguments_number() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]);
         parser.stack = vec![Rc::new(create_plus_token(&settings))];
@@ -936,7 +936,7 @@ mod tests {
 
     #[test]
     fn test_handle_constant() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         match parser.handle_constant(Rc::new(create_one_token())) {
             Ok(_) => assert_eq!(
@@ -949,7 +949,7 @@ mod tests {
 
     #[test]
     fn test_handle_variable() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         match parser.handle_variable(Rc::new(create_x_token())) {
             Ok(_) => {
@@ -965,7 +965,7 @@ mod tests {
 
     #[test]
     fn test_handle_operator_without_computed_before() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.stack = vec![Rc::new(create_plus_token(&settings))];
         if let Err(err) = parser.handle_operator(Rc::new(create_asterisk_token(&settings))) {
@@ -986,7 +986,7 @@ mod tests {
 
     #[test]
     fn test_handle_operator_with_computed_before() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![
             Node::Value(ValueNode::Constant(1.0)),
@@ -1014,7 +1014,7 @@ mod tests {
 
     #[test]
     fn test_handle_operator_with_computed_before_invalid_arguments_number() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]);
         parser.stack = vec![Rc::new(create_asterisk_token(&settings))];
@@ -1037,7 +1037,7 @@ mod tests {
 
     #[test]
     fn test_handle_close_bracket() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![
             Node::Value(ValueNode::Constant(1.0)),
@@ -1069,7 +1069,7 @@ mod tests {
 
     #[test]
     fn test_parse_empty_formula_error() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let expected_error = ParseError::EmptyFormulaError;
         match Parser::parse("", &settings) {
             Ok(actual_tree) => panic!(
@@ -1082,7 +1082,7 @@ mod tests {
 
     #[test]
     fn multiple_formula_error() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let expected_error = ParseError::MultipleFormulaError;
         match Parser::parse("x + 1 1 + 2", &settings) {
             Ok(actual_tree) => panic!(
@@ -1095,7 +1095,7 @@ mod tests {
 
     #[test]
     fn test_parse_without_functions() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let expression = String::from("3 + 4 * 2 / ( x - 5 ) ^ -2 ^ 3");
         let plus = settings.operators.find_binary_by_name("+").unwrap();
         let unary_minus = settings.operators.find_unary_by_name("-").unwrap();
@@ -1107,24 +1107,24 @@ mod tests {
             Ok(actual_tree) => assert_eq!(
                 ExpressionTree {
                     root: Node::Operator(OperationNode {
-                        operation: plus,
+                        operation: Rc::clone(&plus),
                         arguments: vec![
                             Node::Value(ValueNode::Constant(3.0)),
                             Node::Operator(OperationNode {
-                                operation: slash,
+                                operation: Rc::clone(&slash),
                                 arguments: vec![
                                     Node::Operator(OperationNode {
-                                        operation: asterisk,
+                                        operation: Rc::clone(&asterisk),
                                         arguments: vec![
                                             Node::Value(ValueNode::Constant(4.0)),
                                             Node::Value(ValueNode::Constant(2.0)),
                                         ]
                                     }),
                                     Node::Operator(OperationNode {
-                                        operation: circumflex,
+                                        operation: Rc::clone(&circumflex),
                                         arguments: vec![
                                             Node::Operator(OperationNode {
-                                                operation: binary_minus,
+                                                operation: Rc::clone(&binary_minus),
                                                 arguments: vec![
                                                     Node::Value(ValueNode::Variable(String::from(
                                                         "x"
@@ -1133,10 +1133,10 @@ mod tests {
                                                 ]
                                             }),
                                             Node::Operator(OperationNode {
-                                                operation: circumflex,
+                                                operation: Rc::clone(&circumflex),
                                                 arguments: vec![
                                                     Node::Operator(OperationNode {
-                                                        operation: unary_minus,
+                                                        operation: Rc::clone(&unary_minus),
                                                         arguments: vec![Node::Value(
                                                             ValueNode::Constant(2.0)
                                                         ),]
@@ -1163,7 +1163,7 @@ mod tests {
 
     #[test]
     fn test_parse_with_functions() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let expression = String::from("-sin(log(2, 3) / x1 * x2)");
         let unary_minus = settings.operators.find_unary_by_name("-").unwrap();
         let asterisk = settings.operators.find_binary_by_name("*").unwrap();
@@ -1175,17 +1175,17 @@ mod tests {
                 assert_eq!(
                     ExpressionTree {
                         root: Node::Operator(OperationNode {
-                            operation: unary_minus,
+                            operation: Rc::clone(&unary_minus),
                             arguments: vec![Node::Function(OperationNode {
-                                operation: sin,
+                                operation: Rc::clone(&sin),
                                 arguments: vec![Node::Operator(OperationNode {
-                                    operation: asterisk,
+                                    operation: Rc::clone(&asterisk),
                                     arguments: vec![
                                         Node::Operator(OperationNode {
-                                            operation: slash,
+                                            operation: Rc::clone(&slash),
                                             arguments: vec![
                                                 Node::Function(OperationNode {
-                                                    operation: log,
+                                                    operation: Rc::clone(&log),
                                                     arguments: vec![
                                                         Node::Value(ValueNode::Constant(2.0)),
                                                         Node::Value(ValueNode::Constant(3.0)),
@@ -1215,7 +1215,7 @@ mod tests {
     
     #[test]
     fn test_get_error_token_data() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let token = create_sin_token(&settings);
         assert_eq!(ErrorTokenData {
             string: String::from("sin"),
@@ -1258,7 +1258,7 @@ mod tests {
         assert_eq!("The formula is multiple.", format!("{}", ParseError::MultipleFormulaError));
     }
 
-    fn create_one_token() -> Token<'static> {
+    fn create_one_token() -> Token {
         Token::Constant(TokenValue {
             value: 1.0,
             string: String::from("1.0"),
@@ -1266,7 +1266,7 @@ mod tests {
         })
     }
 
-    fn create_x_token() -> Token<'static> {
+    fn create_x_token() -> Token {
         Token::Variable(TokenValue {
             value: String::from("x"),
             string: String::from("x"),
@@ -1276,7 +1276,7 @@ mod tests {
 
     fn create_plus_token(settings: &Settings) -> Token {
         Token::Operator(TokenValue {
-            value: settings.operators.find_binary_by_name("+").unwrap(),
+            value: Rc::clone(&settings.operators.find_binary_by_name("+").unwrap()),
             string: String::from("+"),
             position: 0,
         })
@@ -1290,7 +1290,7 @@ mod tests {
         })
     }
 
-    fn create_sin_token(settings: &Settings) -> Token {
+    fn create_sin_token<'a>(settings: &Settings) -> Token {
         Token::Function(TokenValue {
             value: settings.functions.find_by_name("sin").unwrap(),
             string: String::from("sin"),
@@ -1298,7 +1298,7 @@ mod tests {
         })
     }
 
-    fn create_log_token(settings: &Settings) -> Token {
+    fn create_log_token<'a>(settings: &Settings) -> Token {
         Token::Function(TokenValue {
             value: settings.functions.find_by_name("log").unwrap(),
             string: String::from("log"),
@@ -1306,7 +1306,7 @@ mod tests {
         })
     }
 
-    fn create_opening_bracket_token() -> Token<'static> {
+    fn create_opening_bracket_token() -> Token {
         Token::OpeningBracket(TokenValue {
             value: (),
             string: String::from("("),
@@ -1314,7 +1314,7 @@ mod tests {
         })
     }
 
-    fn create_close_bracket_token() -> Token<'static> {
+    fn create_close_bracket_token() -> Token {
         Token::CloseBracket(TokenValue {
             value: (),
             string: String::from(")"),
@@ -1322,7 +1322,7 @@ mod tests {
         })
     }
 
-    fn create_comma_token() -> Token<'static> {
+    fn create_comma_token() -> Token {
         Token::Comma(TokenValue {
             value: (),
             string: String::from(","),

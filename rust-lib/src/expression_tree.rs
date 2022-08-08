@@ -1,10 +1,11 @@
 //! Expression tree core functionality module.
 use crate::types::{Function, Operation, Operator};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, PartialEq)]
-pub struct ExpressionTree<'a> {
-    pub root: Node<'a>,
+pub struct ExpressionTree {
+    pub root: Node,
     pub variables: Vec<String>,
 }
 
@@ -31,7 +32,7 @@ impl ComputeError {
     }
 }
 
-impl<'a> Computable for ExpressionTree<'a> {
+impl Computable for ExpressionTree {
     fn compute(&self) -> Result<f64, ComputeError> {
         self.root.compute()
     }
@@ -43,7 +44,7 @@ impl<'a> Computable for ExpressionTree<'a> {
     }
 }
 
-impl<'a> ExpressionTree<'a> {
+impl ExpressionTree {
     /// Return a new ExpressionTree where variables have been replaced with values from the `variables` HashMap.
     /// Panic if `variables` HaspMap contains non-existing variables.
     pub fn subs(&self, variables: &HashMap<&str, f64>) -> ExpressionTree {
@@ -62,10 +63,10 @@ impl<'a> ExpressionTree<'a> {
                 .collect(),
         }
     }
-    fn subs_node(node: &'a Node, variables: &HashMap<&str, f64>) -> Node<'a> {
+    fn subs_node(node: &Node, variables: &HashMap<&str, f64>) -> Node {
         match node {
             Node::Operator(operation_node) => Node::Operator(OperationNode {
-                operation: operation_node.operation,
+                operation: Rc::clone(&operation_node.operation),
                 arguments: operation_node
                     .arguments
                     .iter()
@@ -73,7 +74,7 @@ impl<'a> ExpressionTree<'a> {
                     .collect::<Vec<Node>>(),
             }),
             Node::Function(operation_node) => Node::Function(OperationNode {
-                operation: operation_node.operation,
+                operation: Rc::clone(&operation_node.operation),
                 arguments: operation_node
                     .arguments
                     .iter()
@@ -92,13 +93,13 @@ impl<'a> ExpressionTree<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Node<'a> {
-    Operator(OperationNode<'a, Operator>),
-    Function(OperationNode<'a, Function>),
+pub enum Node {
+    Operator(OperationNode<Operator>),
+    Function(OperationNode<Function>),
     Value(ValueNode),
 }
 
-impl<'a> Computable for Node<'a> {
+impl Computable for Node {
     fn compute(&self) -> Result<f64, ComputeError> {
         match self {
             Node::Operator(operator_node) => operator_node.compute(),
@@ -116,12 +117,12 @@ impl<'a> Computable for Node<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct OperationNode<'a, T: Operation> {
-    pub operation: &'a T,
-    pub arguments: Vec<Node<'a>>,
+pub struct OperationNode<T: Operation> {
+    pub operation: Rc<T>,
+    pub arguments: Vec<Node>,
 }
 
-impl<'a, T: Operation> Computable for OperationNode<'a, T> {
+impl<T: Operation> Computable for OperationNode<T> {
     fn compute(&self) -> Result<f64, ComputeError> {
         let mut arguments_result = vec![];
         for argument in &self.arguments {
@@ -149,9 +150,9 @@ impl<'a, T: Operation> Computable for OperationNode<'a, T> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct FunctionNode<'a> {
+pub struct FunctionNode {
     pub function: Function,
-    pub arguments: Vec<Node<'a>>,
+    pub arguments: Vec<Node>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -173,19 +174,19 @@ impl Computable for ValueNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::{self, FunctionCollection, OperatorCollection, Settings};
+    use crate::settings::{FunctionCollection, OperatorCollection, Settings};
 
     #[test]
     #[should_panic(expected = "Expression tree does not contain y variable.")]
     fn test_subs_panics_with_wrong_variable() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let tree = create_test_tree_with_variables(&settings);
         tree.subs(&HashMap::from([("y", 2.0)]));
     }
 
     #[test]
     fn test_subs_x1_variable() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let tree = create_test_tree_with_variables(&settings);
         let expected_tree = ExpressionTree {
             root: Node::Operator(OperationNode {
@@ -232,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_operation_node_compute() -> Result<(), ComputeError> {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let actual = OperationNode {
             operation: settings.operators.find_binary_by_name("+").unwrap(),
             arguments: vec![
@@ -254,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_node_operator_compute() -> Result<(), ComputeError> {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let actual = Node::Operator(OperationNode {
             operation: settings.operators.find_binary_by_name("+").unwrap(),
             arguments: vec![
@@ -269,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_node_function_compute() -> Result<(), ComputeError> {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let actual = Node::Function(OperationNode {
             operation: settings.functions.find_by_name("sin").unwrap(),
             arguments: vec![Node::Value(ValueNode::Constant(0.5))],
@@ -281,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_tree_with_variables_compute() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         if let Ok(_) = create_test_tree_with_variables(&settings).compute() {
             panic!("Computing a tree with a variable must return a `ComputeError`.");
         }
@@ -289,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_tree_without_variables_compute() -> Result<(), ComputeError> {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let actual = create_test_tree_without_variables(&settings).compute()?;
         assert_eq!(2.0_f64 * 3.0_f64 + 5.0_f64.sin() * 10.0_f64, actual);
         Ok(())
@@ -297,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_tree_without_variables_simplify() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut tree = create_test_tree_without_variables(&settings);
         tree.simplify();
         let expected_tree = ExpressionTree {
@@ -309,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_tree_to_simplify_simplify() {
-        let settings = settings::get_default_settings();
+        let settings = Settings::default();
         let mut tree = create_tree_to_simplify(&settings);
         tree.simplify();
         let expected_tree = ExpressionTree {
@@ -328,7 +329,7 @@ mod tests {
         assert_eq!(expected_tree, tree);
     }
 
-    fn create_test_tree_with_variables(settings: &Settings) -> ExpressionTree {
+    fn create_test_tree_with_variables<'a>(settings: &'a Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
                 operation: settings.operators.find_binary_by_name("+").unwrap(),
@@ -358,7 +359,7 @@ mod tests {
         }
     }
 
-    fn create_test_tree_without_variables(settings: &Settings) -> ExpressionTree {
+    fn create_test_tree_without_variables<'a>(settings: &'a Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
                 operation: settings.operators.find_binary_by_name("+").unwrap(),
@@ -386,7 +387,7 @@ mod tests {
         }
     }
 
-    fn create_tree_to_simplify(settings: &Settings) -> ExpressionTree {
+    fn create_tree_to_simplify<'a>(settings: &'a Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Function(OperationNode {
                 operation: settings.functions.find_by_name("sin").unwrap(),

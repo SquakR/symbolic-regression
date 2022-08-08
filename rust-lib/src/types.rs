@@ -1,6 +1,7 @@
 //! Module with common types.
 use std::cmp::PartialEq;
 use std::fmt;
+use std::rc::Rc;
 
 pub trait Operation {
     fn compute(&self, arguments: &[f64]) -> f64;
@@ -113,22 +114,18 @@ pub enum Associativity {
     Right,
 }
 
-pub struct Converter<'a> {
-    pub from: ConverterOperation<'a>,
-    pub to: ConverterOperation<'a>,
-    pub is_conversion_possible_fn: fn(&'a [f64]) -> bool,
-    pub convert_fn: fn(&'a [f64]) -> Vec<f64>,
+pub struct Converter {
+    pub from: ConverterOperation,
+    pub to: ConverterOperation,
+    pub is_conversion_possible_fn: fn(&[f64]) -> bool,
+    pub convert_fn: fn(&[f64]) -> Vec<f64>,
 }
 
-impl<'a> Converter<'a> {
-    fn is_conversion_possible(
-        &self,
-        operation: ConverterOperation<'a>,
-        arguments: &'a [f64],
-    ) -> bool {
+impl Converter {
+    pub fn is_conversion_possible(&self, operation: ConverterOperation, arguments: &[f64]) -> bool {
         operation == self.from && (self.is_conversion_possible_fn)(arguments)
     }
-    fn convert(&self, arguments: &'a [f64]) -> ConvertOutputData<'a> {
+    pub fn convert(&self, arguments: &[f64]) -> ConvertOutputData {
         ConvertOutputData {
             operation: self.to.clone(),
             arguments: (self.convert_fn)(arguments),
@@ -137,15 +134,15 @@ impl<'a> Converter<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ConvertOutputData<'a> {
-    pub operation: ConverterOperation<'a>,
+pub struct ConvertOutputData {
+    pub operation: ConverterOperation,
     pub arguments: Vec<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ConverterOperation<'a> {
-    Operator(&'a Operator),
-    Function(&'a Function),
+pub enum ConverterOperation {
+    Operator(Rc<Operator>),
+    Function(Rc<Function>),
 }
 
 #[cfg(test)]
@@ -240,40 +237,40 @@ mod tests {
 
         #[test]
         fn test_is_conversion_possible() {
-            let log_function = create_log_function();
-            let ln_function = create_ln_function();
+            let log_function = Rc::new(create_log_function());
+            let ln_function = Rc::new(create_ln_function());
             let converter = Converter {
-                from: ConverterOperation::Function(&log_function),
-                to: ConverterOperation::Function(&ln_function),
+                from: ConverterOperation::Function(Rc::clone(&log_function)),
+                to: ConverterOperation::Function(Rc::clone(&ln_function)),
                 is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
                 convert_fn: |arguments| vec![arguments[1]],
             };
             let possible_arguments = vec![E + 0.0001, 10.0];
             let not_possible_arguments = vec![E + 0.01, 10.0];
             assert!(converter.is_conversion_possible(
-                ConverterOperation::Function(&log_function),
+                ConverterOperation::Function(Rc::clone(&log_function)),
                 &possible_arguments
             ));
             assert!(!converter.is_conversion_possible(
-                ConverterOperation::Function(&ln_function),
+                ConverterOperation::Function(Rc::clone(&ln_function)),
                 &not_possible_arguments
             ));
         }
 
         #[test]
         fn test_convert() {
-            let log_function = create_log_function();
-            let ln_function = create_ln_function();
+            let log_function = Rc::new(create_log_function());
+            let ln_function = Rc::new(create_ln_function());
             let converter = Converter {
-                from: ConverterOperation::Function(&log_function),
-                to: ConverterOperation::Function(&ln_function),
+                from: ConverterOperation::Function(Rc::clone(&log_function)),
+                to: ConverterOperation::Function(Rc::clone(&ln_function)),
                 is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
                 convert_fn: |arguments| vec![arguments[1]],
             };
             let arguments = vec![E + 0.0001, 10.0];
             assert_eq!(
                 ConvertOutputData {
-                    operation: ConverterOperation::Function(&ln_function),
+                    operation: ConverterOperation::Function(Rc::clone(&ln_function)),
                     arguments: vec![10.0]
                 },
                 converter.convert(&arguments)
