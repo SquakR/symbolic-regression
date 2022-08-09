@@ -1,4 +1,5 @@
 //! Module with common types.
+use crate::expression_tree::Node;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::rc::Rc;
@@ -15,7 +16,7 @@ pub struct Operator {
     pub associativity: Associativity,
     pub arguments_number: usize,
     pub complexity: u32,
-    pub compute_fn: fn(&[f64]) -> f64,
+    pub compute_fn: fn(arguments: &[f64]) -> f64,
 }
 
 impl Operation for Operator {
@@ -64,7 +65,7 @@ pub struct Function {
     pub name: String,
     pub arguments_number: usize,
     pub complexity: u32,
-    pub compute_fn: fn(&[f64]) -> f64,
+    pub compute_fn: fn(arguments: &[f64]) -> f64,
 }
 
 impl Operation for Function {
@@ -115,8 +116,8 @@ pub enum Associativity {
 pub struct Converter {
     pub from: ConverterOperation,
     pub to: ConverterOperation,
-    pub is_conversion_possible_fn: fn(&[f64]) -> bool,
-    pub convert_fn: fn(&[f64]) -> Vec<f64>,
+    pub is_conversion_possible_fn: fn(arguments: &[Node]) -> bool,
+    pub convert_fn: fn(arguments: Vec<Node>) -> Vec<Node>,
 }
 
 impl fmt::Debug for Converter {
@@ -138,11 +139,11 @@ impl Converter {
     pub fn is_conversion_possible(
         &self,
         operation: &ConverterOperation,
-        arguments: &[f64],
+        arguments: &[Node],
     ) -> bool {
         *operation == self.from && (self.is_conversion_possible_fn)(arguments)
     }
-    pub fn convert(&self, arguments: &[f64]) -> ConvertOutputData {
+    pub fn convert(&self, arguments: Vec<Node>) -> ConvertOutputData {
         ConvertOutputData {
             operation: self.to.clone(),
             arguments: (self.convert_fn)(arguments),
@@ -153,7 +154,7 @@ impl Converter {
 #[derive(Debug, PartialEq)]
 pub struct ConvertOutputData {
     pub operation: ConverterOperation,
-    pub arguments: Vec<f64>,
+    pub arguments: Vec<Node>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -263,6 +264,7 @@ mod tests {
 
     mod converter_tests {
         use super::*;
+        use crate::expression_tree::ValueNode;
         use std::f64::consts::E;
 
         #[test]
@@ -291,8 +293,14 @@ mod tests {
             let log_function = Rc::new(create_log_function());
             let ln_function = Rc::new(create_ln_function());
             let converter = create_log_to_ln_converter();
-            let possible_arguments = vec![E + 0.0001, 10.0];
-            let not_possible_arguments = vec![E + 0.01, 10.0];
+            let possible_arguments = vec![
+                Node::Value(ValueNode::Constant(E + 0.0001)),
+                Node::Value(ValueNode::Constant(10.0)),
+            ];
+            let not_possible_arguments = vec![
+                Node::Value(ValueNode::Constant(E + 0.01)),
+                Node::Value(ValueNode::Constant(10.0)),
+            ];
             assert!(converter.is_conversion_possible(
                 &ConverterOperation::Function(Rc::clone(&log_function)),
                 &possible_arguments
@@ -307,13 +315,16 @@ mod tests {
         fn test_convert() {
             let ln_function = Rc::new(create_ln_function());
             let converter = create_log_to_ln_converter();
-            let arguments = vec![E + 0.0001, 10.0];
+            let arguments = vec![
+                Node::Value(ValueNode::Constant(E + 0.0001)),
+                Node::Value(ValueNode::Constant(10.0)),
+            ];
             assert_eq!(
                 ConvertOutputData {
                     operation: ConverterOperation::Function(Rc::clone(&ln_function)),
-                    arguments: vec![10.0]
+                    arguments: vec![Node::Value(ValueNode::Constant(10.0))]
                 },
-                converter.convert(&arguments)
+                converter.convert(arguments)
             );
         }
 
@@ -339,8 +350,17 @@ mod tests {
             Converter {
                 from: ConverterOperation::Function(Rc::new(create_log_function())),
                 to: ConverterOperation::Function(Rc::new(create_ln_function())),
-                is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
-                convert_fn: |arguments| vec![arguments[1]],
+                is_conversion_possible_fn: |arguments| {
+                    if let Node::Value(ValueNode::Constant(constant)) = arguments[0] {
+                        (constant - E).abs() <= 0.001
+                    } else {
+                        false
+                    }
+                },
+                convert_fn: |mut arguments| {
+                    arguments.remove(0);
+                    arguments
+                },
             }
         }
     }

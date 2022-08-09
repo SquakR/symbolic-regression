@@ -1,4 +1,5 @@
 //! Module with model settings.
+use crate::expression_tree::{Node, ValueNode};
 use crate::types::{
     Associativity, ConvertOutputData, Converter, ConverterOperation, Function, Operation, Operator,
 };
@@ -47,15 +48,18 @@ impl Settings {
     }
     pub fn convert(
         &self,
-        operation: &ConverterOperation,
-        arguments: &[f64],
-    ) -> Option<ConvertOutputData> {
-        for converter in self.find_converters(operation) {
-            if converter.is_conversion_possible(operation, arguments) {
-                return Some(converter.convert(arguments));
+        operation: ConverterOperation,
+        arguments: Vec<Node>,
+    ) -> ConvertOutputData {
+        for converter in self.find_converters(&operation) {
+            if converter.is_conversion_possible(&operation, &arguments) {
+                return converter.convert(arguments);
             }
         }
-        None
+        ConvertOutputData {
+            operation,
+            arguments,
+        }
     }
     pub fn default() -> Settings {
         let mut settings = Settings {
@@ -275,37 +279,73 @@ impl Settings {
                 from: ConverterOperation::Function(Rc::clone(&ln)),
                 to: ConverterOperation::Function(Rc::clone(&log)),
                 is_conversion_possible_fn: |_| true,
-                convert_fn: |arguments| vec![E, arguments[0]],
+                convert_fn: |mut arguments| {
+                    arguments.insert(0, Node::Value(ValueNode::Constant(E)));
+                    arguments
+                },
             },
             Converter {
                 from: ConverterOperation::Function(Rc::clone(&exp)),
                 to: ConverterOperation::Operator(Rc::clone(&circumflex)),
                 is_conversion_possible_fn: |_| true,
-                convert_fn: |arguments| vec![E, arguments[0]],
+                convert_fn: |mut arguments| {
+                    arguments.insert(0, Node::Value(ValueNode::Constant(E)));
+                    arguments
+                },
             },
             Converter {
                 from: ConverterOperation::Function(Rc::clone(&sqrt)),
                 to: ConverterOperation::Operator(Rc::clone(&circumflex)),
                 is_conversion_possible_fn: |_| true,
-                convert_fn: |arguments| vec![arguments[0], 0.5],
+                convert_fn: |mut arguments| {
+                    arguments.push(Node::Value(ValueNode::Constant(0.5)));
+                    arguments
+                },
             },
             Converter {
                 from: ConverterOperation::Function(Rc::clone(&log)),
                 to: ConverterOperation::Function(Rc::clone(&ln)),
-                is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
-                convert_fn: |arguments| vec![arguments[1]],
+                is_conversion_possible_fn: |arguments| {
+                    if let Node::Value(ValueNode::Constant(constant)) = arguments[0] {
+                        (constant - E).abs() <= 0.001
+                    } else {
+                        false
+                    }
+                },
+                convert_fn: |mut arguments| {
+                    arguments.remove(0);
+                    arguments
+                },
             },
             Converter {
                 from: ConverterOperation::Operator(Rc::clone(&circumflex)),
                 to: ConverterOperation::Function(Rc::clone(&exp)),
-                is_conversion_possible_fn: |arguments| (arguments[0] - E).abs() <= 0.001,
-                convert_fn: |arguments| vec![E, arguments[1]],
+                is_conversion_possible_fn: |arguments| {
+                    if let Node::Value(ValueNode::Constant(constant)) = arguments[0] {
+                        (constant - E).abs() <= 0.001
+                    } else {
+                        false
+                    }
+                },
+                convert_fn: |mut arguments| {
+                    arguments.remove(0);
+                    arguments
+                },
             },
             Converter {
                 from: ConverterOperation::Operator(Rc::clone(&circumflex)),
                 to: ConverterOperation::Function(Rc::clone(&sqrt)),
-                is_conversion_possible_fn: |arguments| (arguments[1] - 0.5).abs() <= 0.001,
-                convert_fn: |arguments| vec![arguments[0]],
+                is_conversion_possible_fn: |arguments| {
+                    if let Node::Value(ValueNode::Constant(constant)) = arguments[1] {
+                        (constant - 0.5).abs() <= 0.001
+                    } else {
+                        false
+                    }
+                },
+                convert_fn: |mut arguments| {
+                    arguments.remove(1);
+                    arguments
+                },
             },
         ];
     }
@@ -364,22 +404,41 @@ mod tests {
     }
 
     #[test]
+    fn test_conversion_is_not_possible() {
+        let settings = Settings::default();
+        let log = settings.find_function_by_name("log").unwrap();
+        let expected_output_data = ConvertOutputData {
+            operation: ConverterOperation::Function(Rc::clone(&log)),
+            arguments: vec![
+                Node::Value(ValueNode::Variable(String::from("x"))),
+                Node::Value(ValueNode::Constant(10.0)),
+            ],
+        };
+        let actual_output_data = settings.convert(
+            ConverterOperation::Function(Rc::clone(&log)),
+            vec![
+                Node::Value(ValueNode::Variable(String::from("x"))),
+                Node::Value(ValueNode::Constant(10.0)),
+            ],
+        );
+        assert_eq!(expected_output_data, actual_output_data);
+    }
+
+    #[test]
     fn test_convert_log_to_ln() {
         let settings = Settings::default();
         let expected_output_data = ConvertOutputData {
             operation: ConverterOperation::Function(settings.find_function_by_name("ln").unwrap()),
-            arguments: vec![10.0],
+            arguments: vec![Node::Value(ValueNode::Variable(String::from("x")))],
         };
-        match settings.convert(
-            &ConverterOperation::Function(settings.find_function_by_name("log").unwrap()),
-            &vec![E + 0.0001, 10.0],
-        ) {
-            Some(actual_output_data) => assert_eq!(expected_output_data, actual_output_data),
-            None => panic!(
-                "Expected {:?}, but None was received.",
-                expected_output_data
-            ),
-        }
+        let actual_output_data = settings.convert(
+            ConverterOperation::Function(settings.find_function_by_name("log").unwrap()),
+            vec![
+                Node::Value(ValueNode::Constant(E + 0.0001)),
+                Node::Value(ValueNode::Variable(String::from("x"))),
+            ],
+        );
+        assert_eq!(expected_output_data, actual_output_data);
     }
 
     #[test]
@@ -389,17 +448,15 @@ mod tests {
             operation: ConverterOperation::Operator(
                 settings.find_binary_operator_by_name("^").unwrap(),
             ),
-            arguments: vec![2.0, 0.5],
+            arguments: vec![
+                Node::Value(ValueNode::Constant(2.0)),
+                Node::Value(ValueNode::Constant(0.5)),
+            ],
         };
-        match settings.convert(
-            &ConverterOperation::Function(settings.find_function_by_name("sqrt").unwrap()),
-            &vec![2.0],
-        ) {
-            Some(actual_output_data) => assert_eq!(expected_output_data, actual_output_data),
-            None => panic!(
-                "Expected {:?}, but None was received.",
-                expected_output_data
-            ),
-        }
+        let actual_output_data = settings.convert(
+            ConverterOperation::Function(settings.find_function_by_name("sqrt").unwrap()),
+            vec![Node::Value(ValueNode::Constant(2.0))],
+        );
+        assert_eq!(expected_output_data, actual_output_data);
     }
 }

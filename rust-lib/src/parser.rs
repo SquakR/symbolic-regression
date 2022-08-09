@@ -3,17 +3,14 @@
 //! https://en.wikipedia.org/wiki/Shunting_yard_algorithm
 use crate::expression_tree::{ExpressionTree, Node, OperationNode, ValueNode};
 use crate::settings::Settings;
-use crate::types::{Associativity, Function, Operator};
+use crate::types::{Associativity, ConverterOperation, Function, Operator};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 
 impl<'a> ExpressionTree {
-    pub fn parse(
-        expression: &str,
-        settings: &'a Settings,
-    ) -> Result<ExpressionTree, ParseError> {
+    pub fn parse(expression: &str, settings: &'a Settings) -> Result<ExpressionTree, ParseError> {
         Parser::parse(expression, settings)
     }
 }
@@ -278,45 +275,61 @@ impl<'a> Parser<'a> {
                 ValueNode::Variable(token_value.value.to_owned()),
             ))),
             Token::Function(token_value) => {
-                if self.queue.len() < token_value.value.arguments_number {
-                    return Err(InvalidArgumentsNumberError {
-                        data: (&*token).get_error_token_data(),
-                        expected: token_value.value.arguments_number,
-                        actual: self.queue.len(),
-                    });
-                }
-                let arguments = self
-                    .queue
-                    .split_off(self.queue.len() - token_value.value.arguments_number)
-                    .into_iter()
-                    .collect::<Vec<Node>>();
-                let node = Node::Function(OperationNode {
-                    operation: Rc::clone(&token_value.value),
-                    arguments,
-                });
+                let node = self.create_operation_node(
+                    Rc::clone(&token),
+                    ConverterOperation::Function(Rc::clone(&token_value.value)),
+                    token_value.value.arguments_number,
+                )?;
                 Ok(self.queue.push_back(node))
             }
             Token::Operator(token_value) => {
-                if self.queue.len() < token_value.value.arguments_number {
-                    return Err(InvalidArgumentsNumberError {
-                        data: (&*token).get_error_token_data(),
-                        expected: token_value.value.arguments_number,
-                        actual: self.queue.len(),
-                    });
-                }
-                let arguments = self
-                    .queue
-                    .split_off(self.queue.len() - token_value.value.arguments_number)
-                    .into_iter()
-                    .collect::<Vec<Node>>();
-                let node = Node::Operator(OperationNode {
-                    operation: Rc::clone(&token_value.value),
-                    arguments,
-                });
+                let node = self.create_operation_node(
+                    Rc::clone(&token),
+                    ConverterOperation::Operator(Rc::clone(&token_value.value)),
+                    token_value.value.arguments_number,
+                )?;
                 Ok(self.queue.push_back(node))
             }
             _ => Ok(()),
         }
+    }
+    fn create_operation_node(
+        &mut self,
+        token: Rc<Token>,
+        operation: ConverterOperation,
+        arguments_number: usize,
+    ) -> Result<Node, InvalidArgumentsNumberError> {
+        let arguments = self.extract_arguments(Rc::clone(&token), arguments_number)?;
+        let convert_data = self.settings.convert(operation, arguments);
+        match convert_data.operation {
+            ConverterOperation::Function(function) => Ok(Node::Function(OperationNode {
+                operation: Rc::clone(&function),
+                arguments: convert_data.arguments,
+            })),
+            ConverterOperation::Operator(operator) => Ok(Node::Operator(OperationNode {
+                operation: Rc::clone(&operator),
+                arguments: convert_data.arguments,
+            })),
+        }
+    }
+    fn extract_arguments(
+        &mut self,
+        token: Rc<Token>,
+        arguments_number: usize,
+    ) -> Result<Vec<Node>, InvalidArgumentsNumberError> {
+        if self.queue.len() < arguments_number {
+            return Err(InvalidArgumentsNumberError {
+                data: (&*token).get_error_token_data(),
+                expected: arguments_number,
+                actual: self.queue.len(),
+            });
+        }
+        let arguments = self
+            .queue
+            .split_off(self.queue.len() - arguments_number)
+            .into_iter()
+            .collect::<Vec<Node>>();
+        Ok(arguments)
     }
     fn shift_until_opening_bracket(&mut self, token: Rc<Token>) -> Result<(), ParseError> {
         let mut tokens = VecDeque::new();
@@ -382,7 +395,7 @@ pub enum ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::MissingCommaOrOpeningBracketError(err) => 
+            ParseError::MissingCommaOrOpeningBracketError(err) =>
                 write!(
                     f,
                     "Missing comma or opening bracket at position {}. The token string is \"{}\".",
@@ -486,6 +499,7 @@ impl<'a> Operator {
 mod tests {
     use super::*;
     use crate::settings::Settings;
+    use std::f64::consts::E;
 
     #[test]
     fn test_operator_is_computed_before() {
@@ -735,6 +749,59 @@ mod tests {
             }),]),
             parser.queue
         );
+    }
+
+    #[test]
+    fn test_extract_arguments() {
+        let settings = Settings::default();
+        let mut parser = Parser::new("", &settings);
+        parser.queue = VecDeque::from(vec![
+            Node::Value(ValueNode::Constant(1.0)),
+            Node::Value(ValueNode::Constant(2.0)),
+            Node::Value(ValueNode::Constant(3.0)),
+        ]);
+        if let Err(err) = parser.extract_arguments(Rc::new(create_log_token(&settings)), 2) {
+            panic!(
+                "Expected to extract 2 arguments from the 3 node parser queue, but an error was received {:?}.",
+                err
+            )
+        }
+        assert_eq!(
+            VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]),
+            parser.queue
+        );
+        let expected_error = InvalidArgumentsNumberError {
+            data: create_log_token(&settings).get_error_token_data(),
+            expected: 2,
+            actual: 1,
+        };
+        match parser.extract_arguments(Rc::new(create_log_token(&settings)), 2) {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(err) => assert_eq!(expected_error, err),
+        };
+    }
+
+    #[test]
+    fn test_create_operation_node() {
+        let settings = Settings::default();
+        let mut parser = Parser::new("", &settings);
+        parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Variable(String::from("x")))]);
+        let expected_node = Node::Function(OperationNode {
+            operation: settings.find_function_by_name("log").unwrap(),
+            arguments: vec![
+                Node::Value(ValueNode::Constant(E)),
+                Node::Value(ValueNode::Variable(String::from("x"))),
+            ],
+        });
+        match parser.create_operation_node(
+            Rc::new(create_ln_token(&settings)),
+            ConverterOperation::Function(settings.find_function_by_name("ln").unwrap()),
+            1,
+        ) {
+            Ok(actual_node) => assert_eq!(expected_node, actual_node),
+            Err(err) => panic!("Expected {:?}, but {:?} was received", expected_node, err),
+        }
+        assert_eq!(VecDeque::new(), parser.queue);
     }
 
     #[test]
@@ -1157,11 +1224,10 @@ mod tests {
     #[test]
     fn test_parse_with_functions() {
         let settings = Settings::default();
-        let expression = String::from("-sin(log(2, 3) / x1 * x2)");
+        let expression = String::from("-ln(log(2, 3) / x1 * x2)");
         let unary_minus = settings.find_unary_operator_by_name("-").unwrap();
         let asterisk = settings.find_binary_operator_by_name("*").unwrap();
         let slash = settings.find_binary_operator_by_name("/").unwrap();
-        let sin = settings.find_function_by_name("sin").unwrap();
         let log = settings.find_function_by_name("log").unwrap();
         match Parser::parse(&expression, &settings) {
             Ok(actual_tree) => {
@@ -1170,28 +1236,31 @@ mod tests {
                         root: Node::Operator(OperationNode {
                             operation: Rc::clone(&unary_minus),
                             arguments: vec![Node::Function(OperationNode {
-                                operation: Rc::clone(&sin),
-                                arguments: vec![Node::Operator(OperationNode {
-                                    operation: Rc::clone(&asterisk),
-                                    arguments: vec![
-                                        Node::Operator(OperationNode {
-                                            operation: Rc::clone(&slash),
-                                            arguments: vec![
-                                                Node::Function(OperationNode {
-                                                    operation: Rc::clone(&log),
-                                                    arguments: vec![
-                                                        Node::Value(ValueNode::Constant(2.0)),
-                                                        Node::Value(ValueNode::Constant(3.0)),
-                                                    ]
-                                                }),
-                                                Node::Value(ValueNode::Variable(String::from(
-                                                    "x1"
-                                                )))
-                                            ]
-                                        }),
-                                        Node::Value(ValueNode::Variable(String::from("x2")))
-                                    ]
-                                })]
+                                operation: Rc::clone(&log),
+                                arguments: vec![
+                                    Node::Value(ValueNode::Constant(E)),
+                                    Node::Operator(OperationNode {
+                                        operation: Rc::clone(&asterisk),
+                                        arguments: vec![
+                                            Node::Operator(OperationNode {
+                                                operation: Rc::clone(&slash),
+                                                arguments: vec![
+                                                    Node::Function(OperationNode {
+                                                        operation: Rc::clone(&log),
+                                                        arguments: vec![
+                                                            Node::Value(ValueNode::Constant(2.0)),
+                                                            Node::Value(ValueNode::Constant(3.0)),
+                                                        ]
+                                                    }),
+                                                    Node::Value(ValueNode::Variable(String::from(
+                                                        "x1"
+                                                    )))
+                                                ]
+                                            }),
+                                            Node::Value(ValueNode::Variable(String::from("x2")))
+                                        ]
+                                    })
+                                ]
                             })]
                         }),
                         variables: vec![String::from("x1"), String::from("x2")]
@@ -1205,36 +1274,45 @@ mod tests {
             ),
         }
     }
-    
+
     #[test]
     fn test_get_error_token_data() {
         let settings = Settings::default();
         let token = create_sin_token(&settings);
-        assert_eq!(ErrorTokenData {
-            string: String::from("sin"),
-            position: 0
-        }, token.get_error_token_data());
+        assert_eq!(
+            ErrorTokenData {
+                string: String::from("sin"),
+                position: 0
+            },
+            token.get_error_token_data()
+        );
     }
 
     #[test]
     fn test_parse_error_display() {
         assert_eq!(
             "Missing comma or opening bracket at position 5. The token string is \"sin\".",
-            format!("{}", ParseError::MissingCommaOrOpeningBracketError(MissingCommaOrOpeningBracketError {
-                data: ErrorTokenData {
-                    string: String::from("sin"),
-                    position: 5
-                }
-            }))
+            format!(
+                "{}",
+                ParseError::MissingCommaOrOpeningBracketError(MissingCommaOrOpeningBracketError {
+                    data: ErrorTokenData {
+                        string: String::from("sin"),
+                        position: 5
+                    }
+                })
+            )
         );
         assert_eq!(
             "Missing comma error at position 5. The token string is \"sin\".",
-            format!("{}", ParseError::MissingCommaError(MissingCommaError {
-                data: ErrorTokenData {
-                    string: String::from("sin"),
-                    position: 5
-                }
-            }))
+            format!(
+                "{}",
+                ParseError::MissingCommaError(MissingCommaError {
+                    data: ErrorTokenData {
+                        string: String::from("sin"),
+                        position: 5
+                    }
+                })
+            )
         );
         assert_eq!(
             "Invalid number of arguments at position 5, expected 2, but actually 1. Token string is \"log\".",
@@ -1247,8 +1325,14 @@ mod tests {
                 actual: 1
             }))
         );
-        assert_eq!("The formula is empty.", format!("{}", ParseError::EmptyFormulaError));
-        assert_eq!("The formula is multiple.", format!("{}", ParseError::MultipleFormulaError));
+        assert_eq!(
+            "The formula is empty.",
+            format!("{}", ParseError::EmptyFormulaError)
+        );
+        assert_eq!(
+            "The formula is multiple.",
+            format!("{}", ParseError::MultipleFormulaError)
+        );
     }
 
     fn create_one_token() -> Token {
@@ -1269,7 +1353,7 @@ mod tests {
 
     fn create_plus_token(settings: &Settings) -> Token {
         Token::Operator(TokenValue {
-            value: Rc::clone(&settings.find_binary_operator_by_name("+").unwrap()),
+            value: settings.find_binary_operator_by_name("+").unwrap(),
             string: String::from("+"),
             position: 0,
         })
@@ -1295,6 +1379,14 @@ mod tests {
         Token::Function(TokenValue {
             value: settings.find_function_by_name("log").unwrap(),
             string: String::from("log"),
+            position: 0,
+        })
+    }
+
+    fn create_ln_token<'a>(settings: &Settings) -> Token {
+        Token::Function(TokenValue {
+            value: settings.find_function_by_name("ln").unwrap(),
+            string: String::from("ln"),
             position: 0,
         })
     }
