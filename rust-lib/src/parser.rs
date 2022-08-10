@@ -700,15 +700,10 @@ mod tests {
     }
 
     #[test]
-    fn test_push_token() {
+    fn test_push_token() -> Result<(), InvalidArgumentsNumberError> {
         let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
-        if let Err(err) = parser.push_token(Rc::new(create_one_token())) {
-            panic!(
-                "Expected to push a token with a constant \"1.0\", but an error was received {:?}.",
-                err
-            );
-        }
+        parser.push_token(Rc::new(create_one_token()))?;
         let expected_error = InvalidArgumentsNumberError {
             data: create_plus_token(&settings).get_error_token_data(),
             expected: 2,
@@ -718,24 +713,9 @@ mod tests {
             Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
             Err(err) => assert_eq!(expected_error, err),
         }
-        if let Err(err) = parser.push_token(Rc::new(create_x_token())) {
-            panic!(
-                "Expected to push a token with a variable \"x\", but an error was received {:?}.",
-                err
-            )
-        }
-        if let Err(err) = parser.push_token(Rc::new(create_plus_token(&settings))) {
-            panic!(
-                "Expected to push a token with a operator \"+\", but an error was received {:?}.",
-                err
-            )
-        }
-        if let Err(err) = parser.push_token(Rc::new(create_sin_token(&settings))) {
-            panic!(
-                "Expected to push a token with a function \"sin\", but an error was received {:?}.",
-                err
-            )
-        }
+        parser.push_token(Rc::new(create_x_token()))?;
+        parser.push_token(Rc::new(create_plus_token(&settings)))?;
+        parser.push_token(Rc::new(create_sin_token(&settings)))?;
         assert_eq!(
             VecDeque::from(vec![Node::Function(OperationNode {
                 operation: settings.find_function_by_name("sin").unwrap(),
@@ -749,10 +729,11 @@ mod tests {
             }),]),
             parser.queue
         );
+        Ok(())
     }
 
     #[test]
-    fn test_extract_arguments() {
+    fn test_extract_arguments() -> Result<(), InvalidArgumentsNumberError> {
         let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![
@@ -760,12 +741,7 @@ mod tests {
             Node::Value(ValueNode::Constant(2.0)),
             Node::Value(ValueNode::Constant(3.0)),
         ]);
-        if let Err(err) = parser.extract_arguments(Rc::new(create_log_token(&settings)), 2) {
-            panic!(
-                "Expected to extract 2 arguments from the 3 node parser queue, but an error was received {:?}.",
-                err
-            )
-        }
+        parser.extract_arguments(Rc::new(create_log_token(&settings)), 2)?;
         assert_eq!(
             VecDeque::from(vec![Node::Value(ValueNode::Constant(1.0))]),
             parser.queue
@@ -779,10 +755,11 @@ mod tests {
             Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
             Err(err) => assert_eq!(expected_error, err),
         };
+        Ok(())
     }
 
     #[test]
-    fn test_create_operation_node() {
+    fn test_create_operation_node() -> Result<(), InvalidArgumentsNumberError> {
         let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![Node::Value(ValueNode::Variable(String::from("x")))]);
@@ -793,19 +770,18 @@ mod tests {
                 Node::Value(ValueNode::Variable(String::from("x"))),
             ],
         });
-        match parser.create_operation_node(
+        let actual_node = parser.create_operation_node(
             Rc::new(create_ln_token(&settings)),
             ConverterOperation::Function(settings.find_function_by_name("ln").unwrap()),
             1,
-        ) {
-            Ok(actual_node) => assert_eq!(expected_node, actual_node),
-            Err(err) => panic!("Expected {:?}, but {:?} was received", expected_node, err),
-        }
+        )?;
+        assert_eq!(expected_node, actual_node);
         assert_eq!(VecDeque::new(), parser.queue);
+        Ok(())
     }
 
     #[test]
-    fn test_shift_until_opening_bracket() {
+    fn test_shift_until_opening_bracket() -> Result<(), ParseError> {
         let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![
@@ -817,13 +793,7 @@ mod tests {
             Rc::new(create_opening_bracket_token()),
             Rc::new(create_log_token(&settings)),
         ];
-        if let Err(err) = parser.shift_until_opening_bracket(Rc::new(create_close_bracket_token()))
-        {
-            panic!(
-                "Expected to shift until an opening bracket was encountered, but an error was received {:?}.",
-                err
-            );
-        }
+        parser.shift_until_opening_bracket(Rc::new(create_close_bracket_token()))?;
         assert_eq!(
             vec![
                 Rc::new(create_one_token()),
@@ -841,6 +811,7 @@ mod tests {
             }),]),
             parser.queue
         );
+        Ok(())
     }
 
     #[test]
@@ -917,7 +888,7 @@ mod tests {
     }
 
     #[test]
-    fn test_shift_all() {
+    fn test_shift_all() -> Result<(), ParseError> {
         let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.stack = vec![
@@ -925,9 +896,7 @@ mod tests {
             Rc::new(create_one_token()),
             Rc::new(create_x_token()),
         ];
-        if let Err(err) = parser.shift_all() {
-            panic!("Expected to shift all elements from the stack to the queue, but an error was received {:?}.", err)
-        }
+        parser.shift_all()?;
         let expected_stack: Vec<Rc<Token>> = vec![];
         assert_eq!(expected_stack, parser.stack);
         assert_eq!(
@@ -940,6 +909,7 @@ mod tests {
             })]),
             parser.queue
         );
+        Ok(())
     }
 
     #[test]
@@ -1024,16 +994,11 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_operator_without_computed_before() {
+    fn test_handle_operator_without_computed_before() -> Result<(), ParseError> {
         let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.stack = vec![Rc::new(create_plus_token(&settings))];
-        if let Err(err) = parser.handle_operator(Rc::new(create_asterisk_token(&settings))) {
-            panic!(
-                "Expected to handle a asterisk token, but an error was received {:?}.",
-                err
-            )
-        }
+        parser.handle_operator(Rc::new(create_asterisk_token(&settings)))?;
         assert_eq!(
             vec![
                 Rc::new(create_plus_token(&settings)),
@@ -1042,10 +1007,11 @@ mod tests {
             parser.stack
         );
         assert_eq!(VecDeque::new(), parser.queue);
+        Ok(())
     }
 
     #[test]
-    fn test_handle_operator_with_computed_before() {
+    fn test_handle_operator_with_computed_before() -> Result<(), ParseError> {
         let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![
@@ -1053,12 +1019,7 @@ mod tests {
             Node::Value(ValueNode::Variable(String::from("x"))),
         ]);
         parser.stack = vec![Rc::new(create_asterisk_token(&settings))];
-        if let Err(err) = parser.handle_operator(Rc::new(create_plus_token(&settings))) {
-            panic!(
-                "Expected to handle a plus token, but an error was received {:?}.",
-                err
-            )
-        }
+        parser.handle_operator(Rc::new(create_plus_token(&settings)))?;
         assert_eq!(vec![Rc::new(create_plus_token(&settings)),], parser.stack);
         assert_eq!(
             VecDeque::from(vec![Node::Operator(OperationNode {
@@ -1070,6 +1031,7 @@ mod tests {
             })]),
             parser.queue
         );
+        Ok(())
     }
 
     #[test]
@@ -1096,7 +1058,7 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_close_bracket() {
+    fn test_handle_close_bracket() -> Result<(), ParseError> {
         let settings = Settings::default();
         let mut parser = Parser::new("", &settings);
         parser.queue = VecDeque::from(vec![
@@ -1108,12 +1070,7 @@ mod tests {
             Rc::new(create_log_token(&settings)),
             Rc::new(create_opening_bracket_token()),
         ];
-        if let Err(err) = parser.handle_close_bracket(Rc::new(create_close_bracket_token())) {
-            panic!(
-                "Expected to handle a close bracket, but an error was received {:?}.",
-                err
-            )
-        }
+        parser.handle_close_bracket(Rc::new(create_close_bracket_token()))?;
         assert_eq!(vec![Rc::new(create_one_token())], parser.stack);
         assert_eq!(
             VecDeque::from(vec![Node::Function(OperationNode {
@@ -1124,7 +1081,8 @@ mod tests {
                 ]
             })]),
             parser.queue
-        )
+        );
+        Ok(())
     }
 
     #[test]
@@ -1154,7 +1112,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_without_functions() {
+    fn test_parse_without_functions() -> Result<(), ParseError> {
         let settings = Settings::default();
         let expression = String::from("3 + 4 * 2 / ( x - 5 ) ^ -2 ^ 3");
         let plus = settings.find_binary_operator_by_name("+").unwrap();
@@ -1163,116 +1121,102 @@ mod tests {
         let slash = settings.find_binary_operator_by_name("/").unwrap();
         let asterisk = settings.find_binary_operator_by_name("*").unwrap();
         let circumflex = settings.find_binary_operator_by_name("^").unwrap();
-        match Parser::parse(&expression, &settings) {
-            Ok(actual_tree) => assert_eq!(
-                ExpressionTree {
-                    root: Node::Operator(OperationNode {
-                        operation: Rc::clone(&plus),
-                        arguments: vec![
-                            Node::Value(ValueNode::Constant(3.0)),
-                            Node::Operator(OperationNode {
-                                operation: Rc::clone(&slash),
-                                arguments: vec![
-                                    Node::Operator(OperationNode {
-                                        operation: Rc::clone(&asterisk),
-                                        arguments: vec![
-                                            Node::Value(ValueNode::Constant(4.0)),
-                                            Node::Value(ValueNode::Constant(2.0)),
-                                        ]
-                                    }),
-                                    Node::Operator(OperationNode {
-                                        operation: Rc::clone(&circumflex),
-                                        arguments: vec![
-                                            Node::Operator(OperationNode {
-                                                operation: Rc::clone(&binary_minus),
-                                                arguments: vec![
-                                                    Node::Value(ValueNode::Variable(String::from(
-                                                        "x"
-                                                    ))),
-                                                    Node::Value(ValueNode::Constant(5.0)),
-                                                ]
-                                            }),
-                                            Node::Operator(OperationNode {
-                                                operation: Rc::clone(&circumflex),
-                                                arguments: vec![
-                                                    Node::Operator(OperationNode {
-                                                        operation: Rc::clone(&unary_minus),
-                                                        arguments: vec![Node::Value(
-                                                            ValueNode::Constant(2.0)
-                                                        ),]
-                                                    }),
-                                                    Node::Value(ValueNode::Constant(3.0)),
-                                                ]
-                                            })
-                                        ]
-                                    })
-                                ]
-                            })
-                        ]
-                    }),
-                    variables: vec![String::from("x")]
-                },
-                actual_tree
-            ),
-            Err(err) => panic!(
-                "Expected to parse \"{}\" expression, but an error was received {:?}.",
-                expression, err
-            ),
-        }
+        let actual_tree = Parser::parse(&expression, &settings)?;
+        assert_eq!(
+            ExpressionTree {
+                root: Node::Operator(OperationNode {
+                    operation: Rc::clone(&plus),
+                    arguments: vec![
+                        Node::Value(ValueNode::Constant(3.0)),
+                        Node::Operator(OperationNode {
+                            operation: Rc::clone(&slash),
+                            arguments: vec![
+                                Node::Operator(OperationNode {
+                                    operation: Rc::clone(&asterisk),
+                                    arguments: vec![
+                                        Node::Value(ValueNode::Constant(4.0)),
+                                        Node::Value(ValueNode::Constant(2.0)),
+                                    ]
+                                }),
+                                Node::Operator(OperationNode {
+                                    operation: Rc::clone(&circumflex),
+                                    arguments: vec![
+                                        Node::Operator(OperationNode {
+                                            operation: Rc::clone(&binary_minus),
+                                            arguments: vec![
+                                                Node::Value(ValueNode::Variable(String::from("x"))),
+                                                Node::Value(ValueNode::Constant(5.0)),
+                                            ]
+                                        }),
+                                        Node::Operator(OperationNode {
+                                            operation: Rc::clone(&circumflex),
+                                            arguments: vec![
+                                                Node::Operator(OperationNode {
+                                                    operation: Rc::clone(&unary_minus),
+                                                    arguments: vec![Node::Value(
+                                                        ValueNode::Constant(2.0)
+                                                    ),]
+                                                }),
+                                                Node::Value(ValueNode::Constant(3.0)),
+                                            ]
+                                        })
+                                    ]
+                                })
+                            ]
+                        })
+                    ]
+                }),
+                variables: vec![String::from("x")]
+            },
+            actual_tree
+        );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_with_functions() {
+    fn test_parse_with_functions() -> Result<(), ParseError> {
         let settings = Settings::default();
         let expression = String::from("-ln(log(2, 3) / x1 * x2)");
         let unary_minus = settings.find_unary_operator_by_name("-").unwrap();
         let asterisk = settings.find_binary_operator_by_name("*").unwrap();
         let slash = settings.find_binary_operator_by_name("/").unwrap();
         let log = settings.find_function_by_name("log").unwrap();
-        match Parser::parse(&expression, &settings) {
-            Ok(actual_tree) => {
-                assert_eq!(
-                    ExpressionTree {
-                        root: Node::Operator(OperationNode {
-                            operation: Rc::clone(&unary_minus),
-                            arguments: vec![Node::Function(OperationNode {
-                                operation: Rc::clone(&log),
+        let actual_tree = Parser::parse(&expression, &settings)?;
+        assert_eq!(
+            ExpressionTree {
+                root: Node::Operator(OperationNode {
+                    operation: Rc::clone(&unary_minus),
+                    arguments: vec![Node::Function(OperationNode {
+                        operation: Rc::clone(&log),
+                        arguments: vec![
+                            Node::Value(ValueNode::Constant(E)),
+                            Node::Operator(OperationNode {
+                                operation: Rc::clone(&asterisk),
                                 arguments: vec![
-                                    Node::Value(ValueNode::Constant(E)),
                                     Node::Operator(OperationNode {
-                                        operation: Rc::clone(&asterisk),
+                                        operation: Rc::clone(&slash),
                                         arguments: vec![
-                                            Node::Operator(OperationNode {
-                                                operation: Rc::clone(&slash),
+                                            Node::Function(OperationNode {
+                                                operation: Rc::clone(&log),
                                                 arguments: vec![
-                                                    Node::Function(OperationNode {
-                                                        operation: Rc::clone(&log),
-                                                        arguments: vec![
-                                                            Node::Value(ValueNode::Constant(2.0)),
-                                                            Node::Value(ValueNode::Constant(3.0)),
-                                                        ]
-                                                    }),
-                                                    Node::Value(ValueNode::Variable(String::from(
-                                                        "x1"
-                                                    )))
+                                                    Node::Value(ValueNode::Constant(2.0)),
+                                                    Node::Value(ValueNode::Constant(3.0)),
                                                 ]
                                             }),
-                                            Node::Value(ValueNode::Variable(String::from("x2")))
+                                            Node::Value(ValueNode::Variable(String::from("x1")))
                                         ]
-                                    })
+                                    }),
+                                    Node::Value(ValueNode::Variable(String::from("x2")))
                                 ]
-                            })]
-                        }),
-                        variables: vec![String::from("x1"), String::from("x2")]
-                    },
-                    actual_tree
-                )
-            }
-            Err(err) => panic!(
-                "Expected to parse \"{}\" expression, but an error was received {:?}.",
-                expression, err
-            ),
-        }
+                            })
+                        ]
+                    })]
+                }),
+                variables: vec![String::from("x1"), String::from("x2")]
+            },
+            actual_tree
+        );
+        Ok(())
     }
 
     #[test]
