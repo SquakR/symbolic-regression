@@ -1,9 +1,10 @@
 //! Expression tree core functionality module.
 use crate::types::{Function, Operation, Operator};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct ExpressionTree {
     pub root: Node,
     pub variables: Vec<String>,
@@ -146,12 +147,6 @@ impl<T: Operation> Computable for OperationNode<T> {
             }
         }
     }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct FunctionNode {
-    pub function: Function,
-    pub arguments: Vec<Node>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

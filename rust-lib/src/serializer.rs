@@ -1,9 +1,73 @@
-//! Expression tree serializer module.
-use crate::settings::Settings;
+//! Types serializers module.
+use crate::expression_tree::{Node, OperationNode, ValueNode};
+use crate::types::Operation;
+use serde::ser::{Serialize, SerializeMap, Serializer};
 
-pub trait Serializable<'a> {
-    /// Convert a node to string with function and operator simplification.
-    fn to_string(&self, settings: &'a Settings) -> String;
-    /// Convert a node to json without function and operator simplification.
-    fn to_json(&self) -> String;
+impl Serialize for ValueNode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            ValueNode::Variable(variable) => serializer.serialize_str(variable),
+            ValueNode::Constant(constant) => serializer.serialize_f64(*constant),
+        }
+    }
+}
+
+impl<T: Operation> Serialize for OperationNode<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut operation_node = serializer.serialize_map(Some(1))?;
+        operation_node.serialize_entry(self.operation.get_name(), &self.arguments)?;
+        operation_node.end()
+    }
+}
+
+impl Serialize for Node {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Node::Value(value_node) => value_node.serialize(serializer),
+            Node::Operator(operator_node) => operator_node.serialize(serializer),
+            Node::Function(function_node) => function_node.serialize(serializer),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::expression_tree::ExpressionTree;
+    use crate::settings::Settings;
+    use serde_json::{self, Error};
+
+    #[test]
+    fn test_expression_tree_serialize_to_json() -> Result<(), Error> {
+        let settings = Settings::default();
+        let tree = ExpressionTree {
+            root: Node::Function(OperationNode {
+                operation: settings.find_function_by_name("log").unwrap(),
+                arguments: vec![
+                    Node::Value(ValueNode::Constant(10.0)),
+                    Node::Operator(OperationNode {
+                        operation: settings.find_binary_operator_by_name("+").unwrap(),
+                        arguments: vec![
+                            Node::Value(ValueNode::Variable(String::from("x"))),
+                            Node::Value(ValueNode::Constant(2.0)),
+                        ],
+                    }),
+                ],
+            }),
+            variables: vec![String::from("x")],
+        };
+        let expected_json = "{\"root\":{\"log\":[10.0,{\"+\":[\"x\",2.0]}]},\"variables\":[\"x\"]}";
+        let actual_json = serde_json::to_string(&tree)?;
+        assert_eq!(expected_json, actual_json);
+        Ok(())
+    }
 }
