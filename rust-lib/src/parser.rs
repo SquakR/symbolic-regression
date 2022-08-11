@@ -300,17 +300,7 @@ impl<'a> Parser<'a> {
         arguments_number: usize,
     ) -> Result<Node, InvalidArgumentsNumberError> {
         let arguments = self.extract_arguments(Rc::clone(&token), arguments_number)?;
-        let convert_data = self.settings.convert(operation, arguments);
-        match convert_data.operation {
-            ConverterOperation::Function(function) => Ok(Node::Function(OperationNode {
-                operation: Rc::clone(&function),
-                arguments: convert_data.arguments,
-            })),
-            ConverterOperation::Operator(operator) => Ok(Node::Operator(OperationNode {
-                operation: Rc::clone(&operator),
-                arguments: convert_data.arguments,
-            })),
-        }
+        Ok(self.settings.convert(operation, arguments).to_node())
     }
     fn extract_arguments(
         &mut self,

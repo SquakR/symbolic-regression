@@ -1,5 +1,6 @@
 //! Expression tree core functionality module.
-use crate::types::{Function, Operation, Operator};
+use crate::settings::Settings;
+use crate::types::{ConverterOperation, Function, Operation, Operator};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -64,19 +65,26 @@ impl ExpressionTree {
                 .collect(),
         }
     }
+    /// Return a new ExpressionTree where internal functions and operations have been replaced with output ones.
+    pub fn create_output(&self, settings: &Settings) -> ExpressionTree {
+        ExpressionTree {
+            root: ExpressionTree::create_output_node(&self.root, settings),
+            variables: self.variables.clone(),
+        }
+    }
     fn subs_node(node: &Node, variables: &HashMap<&str, f64>) -> Node {
         match node {
-            Node::Operator(operation_node) => Node::Operator(OperationNode {
-                operation: Rc::clone(&operation_node.operation),
-                arguments: operation_node
+            Node::Operator(operator_node) => Node::Operator(OperationNode {
+                operation: Rc::clone(&operator_node.operation),
+                arguments: operator_node
                     .arguments
                     .iter()
                     .map(|argument_node| ExpressionTree::subs_node(argument_node, variables))
                     .collect::<Vec<Node>>(),
             }),
-            Node::Function(operation_node) => Node::Function(OperationNode {
-                operation: Rc::clone(&operation_node.operation),
-                arguments: operation_node
+            Node::Function(function_node) => Node::Function(OperationNode {
+                operation: Rc::clone(&function_node.operation),
+                arguments: function_node
                     .arguments
                     .iter()
                     .map(|argument_node| ExpressionTree::subs_node(argument_node, variables))
@@ -91,9 +99,42 @@ impl ExpressionTree {
             },
         }
     }
+    fn create_output_node(node: &Node, settings: &Settings) -> Node {
+        match node {
+            Node::Operator(operator_node) => {
+                let mut output_data = settings.convert(
+                    ConverterOperation::Operator(Rc::clone(&operator_node.operation)),
+                    operator_node.arguments.clone(),
+                );
+                output_data.arguments = output_data
+                    .arguments
+                    .iter()
+                    .map(|argument_node| {
+                        ExpressionTree::create_output_node(argument_node, settings)
+                    })
+                    .collect::<Vec<Node>>();
+                output_data.to_node()
+            }
+            Node::Function(function_node) => {
+                let mut output_data = settings.convert(
+                    ConverterOperation::Function(Rc::clone(&function_node.operation)),
+                    function_node.arguments.clone(),
+                );
+                output_data.arguments = output_data
+                    .arguments
+                    .iter()
+                    .map(|argument_node| {
+                        ExpressionTree::create_output_node(argument_node, settings)
+                    })
+                    .collect::<Vec<Node>>();
+                output_data.to_node()
+            }
+            Node::Value(value_node) => Node::Value(value_node.clone()),
+        }
+    }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Node {
     Operator(OperationNode<Operator>),
     Function(OperationNode<Function>),
@@ -117,7 +158,7 @@ impl Computable for Node {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct OperationNode<T: Operation> {
     pub operation: Rc<T>,
     pub arguments: Vec<Node>,
@@ -168,7 +209,7 @@ impl Computable for ValueNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::Settings;
+    use std::f64::consts::E;
 
     #[test]
     #[should_panic(expected = "Expression tree does not contain y variable.")]
@@ -209,6 +250,27 @@ mod tests {
         };
         let actual_tree = tree.subs(&HashMap::from([("x1", 2.0)]));
         assert_eq!(expected_tree, actual_tree);
+    }
+
+    #[test]
+    fn test_create_output() {
+        let settings = Settings::default();
+        let tree = create_tree_to_output(&settings);
+        let expected_tree = ExpressionTree {
+            root: Node::Function(OperationNode {
+                operation: settings.find_function_by_name("sin").unwrap(),
+                arguments: vec![Node::Function(OperationNode {
+                    operation: settings.find_function_by_name("exp").unwrap(),
+                    arguments: vec![Node::Function(OperationNode {
+                        operation: settings.find_function_by_name("ln").unwrap(),
+                        arguments: vec![Node::Value(ValueNode::Variable(String::from("x")))],
+                    })],
+                })],
+            }),
+            variables: vec![String::from("x")],
+        };
+        let actual_tree = tree.create_output(&settings);
+        assert_eq!(expected_tree, actual_tree)
     }
 
     #[test]
@@ -323,7 +385,7 @@ mod tests {
         assert_eq!(expected_tree, tree);
     }
 
-    fn create_test_tree_with_variables<'a>(settings: &'a Settings) -> ExpressionTree {
+    fn create_test_tree_with_variables(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
                 operation: settings.find_binary_operator_by_name("+").unwrap(),
@@ -353,7 +415,7 @@ mod tests {
         }
     }
 
-    fn create_test_tree_without_variables<'a>(settings: &'a Settings) -> ExpressionTree {
+    fn create_test_tree_without_variables(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
                 operation: settings.find_binary_operator_by_name("+").unwrap(),
@@ -381,7 +443,29 @@ mod tests {
         }
     }
 
-    fn create_tree_to_simplify<'a>(settings: &'a Settings) -> ExpressionTree {
+    fn create_tree_to_output(settings: &Settings) -> ExpressionTree {
+        ExpressionTree {
+            root: Node::Function(OperationNode {
+                operation: settings.find_function_by_name("sin").unwrap(),
+                arguments: vec![Node::Operator(OperationNode {
+                    operation: settings.find_binary_operator_by_name("^").unwrap(),
+                    arguments: vec![
+                        Node::Value(ValueNode::Constant(E + 0.0001)),
+                        Node::Function(OperationNode {
+                            operation: settings.find_function_by_name("log").unwrap(),
+                            arguments: vec![
+                                Node::Value(ValueNode::Constant(E - 0.0001)),
+                                Node::Value(ValueNode::Variable(String::from("x"))),
+                            ],
+                        }),
+                    ],
+                })],
+            }),
+            variables: vec![String::from("x")],
+        }
+    }
+
+    fn create_tree_to_simplify(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Function(OperationNode {
                 operation: settings.find_function_by_name("sin").unwrap(),

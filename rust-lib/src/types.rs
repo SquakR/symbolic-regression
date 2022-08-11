@@ -1,5 +1,5 @@
 //! Module with common types.
-use crate::expression_tree::Node;
+use crate::expression_tree::{Node, OperationNode};
 use std::cmp::PartialEq;
 use std::fmt;
 use std::rc::Rc;
@@ -161,6 +161,21 @@ pub struct ConvertOutputData {
 pub enum ConverterOperation {
     Operator(Rc<Operator>),
     Function(Rc<Function>),
+}
+
+impl ConvertOutputData {
+    pub fn to_node(self) -> Node {
+        match self.operation {
+            ConverterOperation::Function(function) => Node::Function(OperationNode {
+                operation: Rc::clone(&function),
+                arguments: self.arguments,
+            }),
+            ConverterOperation::Operator(operator) => Node::Operator(OperationNode {
+                operation: Rc::clone(&operator),
+                arguments: self.arguments,
+            }),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -328,6 +343,44 @@ mod tests {
             );
         }
 
+        #[test]
+        fn test_convert_output_data_to_node_operator() {
+            let operator_output_data = ConvertOutputData {
+                operation: ConverterOperation::Operator(Rc::new(create_plus_operator())),
+                arguments: vec![
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                    Node::Value(ValueNode::Constant(1.0)),
+                ],
+            };
+            let expected_node = Node::Operator(OperationNode {
+                operation: Rc::new(create_plus_operator()),
+                arguments: vec![
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                    Node::Value(ValueNode::Constant(1.0)),
+                ],
+            });
+            assert_eq!(expected_node, operator_output_data.to_node());
+        }
+
+        #[test]
+        fn test_convert_output_data_to_node_function() {
+            let function_output_data = ConvertOutputData {
+                operation: ConverterOperation::Function(Rc::new(create_log_function())),
+                arguments: vec![
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                    Node::Value(ValueNode::Constant(1.0)),
+                ],
+            };
+            let expected_node = Node::Function(OperationNode {
+                operation: Rc::new(create_log_function()),
+                arguments: vec![
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                    Node::Value(ValueNode::Constant(1.0)),
+                ],
+            });
+            assert_eq!(expected_node, function_output_data.to_node());
+        }
+
         fn create_log_function() -> Function {
             Function {
                 name: String::from("log"),
@@ -343,6 +396,17 @@ mod tests {
                 arguments_number: 1,
                 complexity: 1,
                 compute_fn: |arguments| arguments[0].ln(),
+            }
+        }
+
+        fn create_plus_operator() -> Operator {
+            Operator {
+                name: String::from("+"),
+                arguments_number: 2,
+                precedence: 1,
+                associativity: Associativity::Left,
+                complexity: 1,
+                compute_fn: |arguments| arguments[0] + arguments[1],
             }
         }
 
