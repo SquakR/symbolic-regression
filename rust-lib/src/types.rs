@@ -24,7 +24,7 @@ impl Operation for Operator {
     fn compute(&self, arguments: &[f64]) -> f64 {
         if arguments.len() != self.arguments_number {
             panic!(
-                "The function `{}` expected {} arguments but received {}.",
+                "The operator `{}` expected {} arguments, but received {}.",
                 self,
                 self.arguments_number,
                 arguments.len()
@@ -86,7 +86,7 @@ impl Operation for Function {
     fn compute(&self, arguments: &[f64]) -> f64 {
         if arguments.len() != self.arguments_number {
             panic!(
-                "The function `{}` expected {} arguments but received {}.",
+                "The function `{}` expected {} arguments, but received {}.",
                 self,
                 self.arguments_number,
                 arguments.len()
@@ -201,32 +201,39 @@ mod tests {
 
         #[test]
         fn test_debug() {
-            let test_operator = create_plus_operator();
+            let plus_operator = create_plus_operator();
             assert_eq!(
                 "Operator { name: \"+\", arguments_number: 2, precedence: 1, associativity: Left, complexity: 1 }",
-                format!("{:?}", test_operator)
+                format!("{:?}", plus_operator)
             );
         }
 
         #[test]
         fn test_display() {
-            let test_operator = create_plus_operator();
-            assert_eq!("+", format!("{}", test_operator));
+            let plus_operator = create_plus_operator();
+            assert_eq!("+", format!("{}", plus_operator));
         }
 
         #[test]
         fn test_eq() {
-            let test_operator1 = create_plus_operator();
-            let mut test_operator2 = create_plus_operator();
-            assert!(test_operator1 == test_operator2);
-            test_operator2.name = String::from("-");
-            assert!(test_operator1 != test_operator2);
+            let plus_operator1 = create_plus_operator();
+            let mut plus_operator2 = create_plus_operator();
+            assert!(plus_operator1 == plus_operator2);
+            plus_operator2.name = String::from("-");
+            assert!(plus_operator1 != plus_operator2);
         }
 
         #[test]
         fn test_compute() {
-            let test_operator = create_plus_operator();
-            assert_eq!(3.0, test_operator.compute(&[1.0, 2.0]));
+            let plus_operator = create_plus_operator();
+            assert_eq!(3.0, plus_operator.compute(&[1.0, 2.0]));
+        }
+
+        #[test]
+        #[should_panic(expected = "The operator `+` expected 2 arguments, but received 1.")]
+        fn test_compute_panic() {
+            let plus_operator = create_plus_operator();
+            plus_operator.compute(&[1.0]);
         }
 
         #[test]
@@ -277,10 +284,10 @@ mod tests {
         }
 
         #[test]
-        #[should_panic(expected = "The function `sin` expected 1 arguments but received 2.")]
+        #[should_panic(expected = "The function `sin` expected 1 arguments, but received 2.")]
         fn test_compute_panic() {
             let test_function = create_test_function();
-            assert_eq!(2.0_f64.sin(), test_function.compute(&[1.0, 2.0]));
+            test_function.compute(&[1.0, 2.0]);
         }
 
         fn create_test_function() -> Function {
