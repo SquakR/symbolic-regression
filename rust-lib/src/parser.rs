@@ -1,10 +1,9 @@
 //! Expression tree parser module.
 //! The parser uses the shunting yard algorithm.
 //! https://en.wikipedia.org/wiki/Shunting_yard_algorithm
-use crate::expression_tree::{ExpressionTree, Node, OperationNode, ValueNode};
+use crate::expression_tree::{ExpressionTree, Node, ValueNode};
 use crate::settings::Settings;
-use crate::types::{Associativity, ConverterOperation, Function, Operator};
-use std::cmp::Ordering;
+use crate::types::{ConverterOperation, Function, Operator};
 use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
@@ -472,38 +471,12 @@ impl<T> TokenValue<T> {
     }
 }
 
-impl<'a> Operator {
-    fn is_computed_before(&self, other: &Operator) -> bool {
-        match self.precedence.cmp(&other.precedence) {
-            Ordering::Equal => match other.associativity {
-                Associativity::Left => true,
-                Associativity::Right => false,
-            },
-            Ordering::Greater => true,
-            Ordering::Less => false,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::expression_tree::OperationNode;
     use crate::settings::Settings;
     use std::f64::consts::E;
-
-    #[test]
-    fn test_operator_is_computed_before() {
-        let settings = Settings::default();
-        let plus = settings.find_binary_operator_by_name("+").unwrap();
-        let minus = settings.find_binary_operator_by_name("-").unwrap();
-        let asterisk = settings.find_binary_operator_by_name("*").unwrap();
-        let slash = settings.find_binary_operator_by_name("/").unwrap();
-        let circumflex = settings.find_binary_operator_by_name("^").unwrap();
-        assert!(plus.is_computed_before(&*plus));
-        assert!(plus.is_computed_before(&*minus));
-        assert!(!plus.is_computed_before(&*asterisk));
-        assert!(circumflex.is_computed_before(&*slash));
-    }
 
     #[test]
     fn test_recognize_value_string_constant() {
@@ -549,7 +522,7 @@ mod tests {
         });
         match parser.recognize_string("-", 5, true) {
             Some(actual_token) => assert_eq!(expected_token, actual_token),
-            None => panic!("Expected {:?} but got None.", expected_token),
+            None => panic!("Expected {:?}, but got None.", expected_token),
         }
     }
 
@@ -564,7 +537,7 @@ mod tests {
         });
         match parser.recognize_string("-", 5, false) {
             Some(actual_token) => assert_eq!(expected_token, actual_token),
-            None => panic!("Expected {:?} but got None.", expected_token),
+            None => panic!("Expected {:?}, but got None.", expected_token),
         }
     }
 
@@ -579,7 +552,7 @@ mod tests {
         });
         match parser.recognize_string("sin", 5, false) {
             Some(actual_token) => assert_eq!(expected_token, actual_token),
-            None => panic!("Expected {:?} but got None.", expected_token),
+            None => panic!("Expected {:?}, but got None.", expected_token),
         }
     }
 
@@ -594,7 +567,7 @@ mod tests {
         });
         match parser.recognize_string("(", 5, false) {
             Some(actual_token) => assert_eq!(expected_token, actual_token),
-            None => panic!("Expected {:?} but got None.", expected_token),
+            None => panic!("Expected {:?}, but got None.", expected_token),
         }
     }
 
@@ -603,7 +576,7 @@ mod tests {
         let settings = Settings::default();
         let parser = Parser::new("", &settings);
         if let Some(actual_token) = parser.recognize_string("unknown", 5, false) {
-            panic!("Expected None but got {:?}", actual_token)
+            panic!("Expected None, but got {:?}", actual_token)
         }
     }
 

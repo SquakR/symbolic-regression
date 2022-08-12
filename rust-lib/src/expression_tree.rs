@@ -3,6 +3,7 @@ use crate::settings::Settings;
 use crate::types::{ConverterOperation, Function, Operation, Operator};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::rc::Rc;
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -43,6 +44,12 @@ impl Computable for ExpressionTree {
             Ok(value) => self.root = Node::Value(ValueNode::Constant(value)),
             Err(_) => self.root.simplify(),
         }
+    }
+}
+
+impl fmt::Display for ExpressionTree {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.root)
     }
 }
 
@@ -141,6 +148,39 @@ pub enum Node {
     Value(ValueNode),
 }
 
+impl fmt::Display for Node {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Node::Operator(operator_node) => {
+                if operator_node.operation.arguments_number == 2 {
+                    f.write_str(
+                        &operator_node
+                            .arguments
+                            .iter()
+                            .map(|argument| {
+                                if let Node::Operator(argument_node) = argument {
+                                    if !argument_node
+                                        .operation
+                                        .is_computed_before(&operator_node.operation)
+                                    {
+                                        return format!("({})", argument);
+                                    }
+                                }
+                                format!("{}", argument)
+                            })
+                            .collect::<Vec<String>>()
+                            .join(&format!(" {} ", operator_node.operation.name)),
+                    )
+                } else {
+                    write!(f, "{}", operator_node)
+                }
+            }
+            Node::Function(function_node) => write!(f, "{}", function_node),
+            Node::Value(value_node) => write!(f, "{}", value_node),
+        }
+    }
+}
+
 impl Computable for Node {
     fn compute(&self) -> Result<f64, ComputeError> {
         match self {
@@ -162,6 +202,37 @@ impl Computable for Node {
 pub struct OperationNode<T: Operation> {
     pub operation: Rc<T>,
     pub arguments: Vec<Node>,
+}
+
+impl fmt::Display for OperationNode<Operator> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.operation.arguments_number {
+            1 => write!(f, "{}{}", self.operation.get_name(), self.arguments[0]),
+            2 => write!(
+                f,
+                "{} {} {}",
+                self.arguments[0],
+                self.operation.get_name(),
+                self.arguments[1]
+            ),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl fmt::Display for OperationNode<Function> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}({})",
+            self.operation.get_name(),
+            self.arguments
+                .iter()
+                .map(|argument| argument.to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
 }
 
 impl<T: Operation> Computable for OperationNode<T> {
@@ -196,6 +267,15 @@ pub enum ValueNode {
     Constant(f64),
 }
 
+impl fmt::Display for ValueNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ValueNode::Variable(variable) => write!(f, "{}", variable),
+            ValueNode::Constant(constant) => write!(f, "{}", constant),
+        }
+    }
+}
+
 impl Computable for ValueNode {
     fn compute(&self) -> Result<f64, ComputeError> {
         match self {
@@ -215,14 +295,14 @@ mod tests {
     #[should_panic(expected = "Expression tree does not contain y variable.")]
     fn test_subs_panics_with_wrong_variable() {
         let settings = Settings::default();
-        let tree = create_test_tree_with_variables(&settings);
+        let tree = create_tree_with_variables(&settings);
         tree.subs(&HashMap::from([("y", 2.0)]));
     }
 
     #[test]
     fn test_subs_x1_variable() {
         let settings = Settings::default();
-        let tree = create_test_tree_with_variables(&settings);
+        let tree = create_tree_with_variables(&settings);
         let expected_tree = ExpressionTree {
             root: Node::Operator(OperationNode {
                 operation: settings.find_binary_operator_by_name("+").unwrap(),
@@ -271,6 +351,60 @@ mod tests {
         };
         let actual_tree = tree.create_output(&settings);
         assert_eq!(expected_tree, actual_tree)
+    }
+
+    #[test]
+    fn test_display_value_node() {
+        let variable_node = ValueNode::Variable(String::from("x"));
+        assert_eq!("x", variable_node.to_string());
+        let constant_node = ValueNode::Constant(1.0);
+        assert_eq!("1", constant_node.to_string());
+    }
+
+    #[test]
+    fn test_display_operation_node_operator() {
+        let settings = Settings::default();
+        let one_argument_node = OperationNode {
+            operation: settings.find_unary_operator_by_name("-").unwrap(),
+            arguments: vec![Node::Value(ValueNode::Constant(1.0))],
+        };
+        assert_eq!("-1", one_argument_node.to_string());
+        let two_arguments_node = OperationNode {
+            operation: settings.find_binary_operator_by_name("+").unwrap(),
+            arguments: vec![
+                Node::Value(ValueNode::Variable(String::from("x"))),
+                Node::Value(ValueNode::Constant(1.0)),
+            ],
+        };
+        assert_eq!("x + 1", two_arguments_node.to_string());
+    }
+
+    #[test]
+    fn test_display_operation_node_function() {
+        let settings = Settings::default();
+        let sin_node = OperationNode {
+            operation: settings.find_function_by_name("sin").unwrap(),
+            arguments: vec![Node::Value(ValueNode::Constant(1.0))],
+        };
+        assert_eq!("sin(1)", sin_node.to_string());
+        let log_node = OperationNode {
+            operation: settings.find_function_by_name("log").unwrap(),
+            arguments: vec![
+                Node::Value(ValueNode::Constant(2.0)),
+                Node::Value(ValueNode::Variable(String::from("x"))),
+            ],
+        };
+        assert_eq!("log(2, x)", log_node.to_string());
+    }
+
+    #[test]
+    fn test_display_expression_tree() {
+        let settings = Settings::default();
+        let tree = create_tree_to_display(&settings);
+        assert_eq!(
+            "(log(0.5, 1) * x1 / 1.5) ^ (2 ^ 2.5 * (3 + x2))",
+            tree.to_string()
+        );
     }
 
     #[test]
@@ -339,7 +473,7 @@ mod tests {
     #[test]
     fn test_tree_with_variables_compute() {
         let settings = Settings::default();
-        if let Ok(_) = create_test_tree_with_variables(&settings).compute() {
+        if let Ok(_) = create_tree_with_variables(&settings).compute() {
             panic!("Computing a tree with a variable must return a `ComputeError`.");
         }
     }
@@ -347,7 +481,7 @@ mod tests {
     #[test]
     fn test_tree_without_variables_compute() -> Result<(), ComputeError> {
         let settings = Settings::default();
-        let actual = create_test_tree_without_variables(&settings).compute()?;
+        let actual = create_tree_without_variables(&settings).compute()?;
         assert_eq!(2.0_f64 * 3.0_f64 + 5.0_f64.sin() * 10.0_f64, actual);
         Ok(())
     }
@@ -355,7 +489,7 @@ mod tests {
     #[test]
     fn test_tree_without_variables_simplify() {
         let settings = Settings::default();
-        let mut tree = create_test_tree_without_variables(&settings);
+        let mut tree = create_tree_without_variables(&settings);
         tree.simplify();
         let expected_tree = ExpressionTree {
             root: Node::Value(ValueNode::Constant(2.0 * 3.0 + 5.0_f64.sin() * 10.0)),
@@ -385,7 +519,7 @@ mod tests {
         assert_eq!(expected_tree, tree);
     }
 
-    fn create_test_tree_with_variables(settings: &Settings) -> ExpressionTree {
+    fn create_tree_with_variables(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
                 operation: settings.find_binary_operator_by_name("+").unwrap(),
@@ -415,7 +549,7 @@ mod tests {
         }
     }
 
-    fn create_test_tree_without_variables(settings: &Settings) -> ExpressionTree {
+    fn create_tree_without_variables(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Operator(OperationNode {
                 operation: settings.find_binary_operator_by_name("+").unwrap(),
@@ -440,6 +574,55 @@ mod tests {
                 ],
             }),
             variables: vec![],
+        }
+    }
+
+    fn create_tree_to_display(settings: &Settings) -> ExpressionTree {
+        ExpressionTree {
+            root: Node::Operator(OperationNode {
+                operation: settings.find_binary_operator_by_name("^").unwrap(),
+                arguments: vec![
+                    Node::Operator(OperationNode {
+                        operation: settings.find_binary_operator_by_name("*").unwrap(),
+                        arguments: vec![
+                            Node::Function(OperationNode {
+                                operation: settings.find_function_by_name("log").unwrap(),
+                                arguments: vec![
+                                    Node::Value(ValueNode::Constant(0.5)),
+                                    Node::Value(ValueNode::Constant(1.0)),
+                                ],
+                            }),
+                            Node::Operator(OperationNode {
+                                operation: settings.find_binary_operator_by_name("/").unwrap(),
+                                arguments: vec![
+                                    Node::Value(ValueNode::Variable(String::from("x1"))),
+                                    Node::Value(ValueNode::Constant(1.5)),
+                                ],
+                            }),
+                        ],
+                    }),
+                    Node::Operator(OperationNode {
+                        operation: settings.find_binary_operator_by_name("*").unwrap(),
+                        arguments: vec![
+                            Node::Operator(OperationNode {
+                                operation: settings.find_binary_operator_by_name("^").unwrap(),
+                                arguments: vec![
+                                    Node::Value(ValueNode::Constant(2.0)),
+                                    Node::Value(ValueNode::Constant(2.5)),
+                                ],
+                            }),
+                            Node::Operator(OperationNode {
+                                operation: settings.find_binary_operator_by_name("+").unwrap(),
+                                arguments: vec![
+                                    Node::Value(ValueNode::Constant(3.0)),
+                                    Node::Value(ValueNode::Variable(String::from("x2"))),
+                                ],
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+            variables: vec![String::from("x1"), String::from("x2")],
         }
     }
 

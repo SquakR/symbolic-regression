@@ -1,5 +1,6 @@
 //! Module with common types.
 use crate::expression_tree::{Node, OperationNode};
+use std::cmp::Ordering;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::rc::Rc;
@@ -57,6 +58,19 @@ impl fmt::Display for Operator {
 impl PartialEq for Operator {
     fn eq(&self, other: &Operator) -> bool {
         format!("{:?}", self) == format!("{:?}", other)
+    }
+}
+
+impl Operator {
+    pub fn is_computed_before(&self, other: &Operator) -> bool {
+        match self.precedence.cmp(&other.precedence) {
+            Ordering::Equal => match other.associativity {
+                Associativity::Left => true,
+                Associativity::Right => false,
+            },
+            Ordering::Greater => true,
+            Ordering::Less => false,
+        }
     }
 }
 
@@ -187,7 +201,7 @@ mod tests {
 
         #[test]
         fn test_debug() {
-            let test_operator = create_test_operator();
+            let test_operator = create_plus_operator();
             assert_eq!(
                 "Operator { name: \"+\", arguments_number: 2, precedence: 1, associativity: Left, complexity: 1 }",
                 format!("{:?}", test_operator)
@@ -196,14 +210,14 @@ mod tests {
 
         #[test]
         fn test_display() {
-            let test_operator = create_test_operator();
+            let test_operator = create_plus_operator();
             assert_eq!("+", format!("{}", test_operator));
         }
 
         #[test]
         fn test_eq() {
-            let test_operator1 = create_test_operator();
-            let mut test_operator2 = create_test_operator();
+            let test_operator1 = create_plus_operator();
+            let mut test_operator2 = create_plus_operator();
             assert!(test_operator1 == test_operator2);
             test_operator2.name = String::from("-");
             assert!(test_operator1 != test_operator2);
@@ -211,19 +225,21 @@ mod tests {
 
         #[test]
         fn test_compute() {
-            let test_operator = create_test_operator();
+            let test_operator = create_plus_operator();
             assert_eq!(3.0, test_operator.compute(&[1.0, 2.0]));
         }
 
-        fn create_test_operator() -> Operator {
-            Operator {
-                name: String::from("+"),
-                arguments_number: 2,
-                precedence: 1,
-                associativity: Associativity::Left,
-                complexity: 1,
-                compute_fn: |arguments| arguments[0] + arguments[1],
-            }
+        #[test]
+        fn test_operator_is_computed_before() {
+            let plus = create_plus_operator();
+            let minus = create_minis_operator();
+            let asterisk = create_asterisk_operator();
+            let slash = create_slash_operator();
+            let circumflex = create_circumflex_operator();
+            assert!(plus.is_computed_before(&plus));
+            assert!(plus.is_computed_before(&minus));
+            assert!(!plus.is_computed_before(&asterisk));
+            assert!(circumflex.is_computed_before(&slash));
         }
     }
 
@@ -399,17 +415,6 @@ mod tests {
             }
         }
 
-        fn create_plus_operator() -> Operator {
-            Operator {
-                name: String::from("+"),
-                arguments_number: 2,
-                precedence: 1,
-                associativity: Associativity::Left,
-                complexity: 1,
-                compute_fn: |arguments| arguments[0] + arguments[1],
-            }
-        }
-
         fn create_log_to_ln_converter() -> Converter {
             Converter {
                 from: ConverterOperation::Function(Rc::new(create_log_function())),
@@ -426,6 +431,61 @@ mod tests {
                     arguments
                 },
             }
+        }
+    }
+
+    fn create_plus_operator() -> Operator {
+        Operator {
+            name: String::from("+"),
+            arguments_number: 2,
+            precedence: 1,
+            associativity: Associativity::Left,
+            complexity: 1,
+            compute_fn: |arguments| arguments[0] + arguments[1],
+        }
+    }
+
+    fn create_minis_operator() -> Operator {
+        Operator {
+            name: String::from("-"),
+            arguments_number: 2,
+            precedence: 1,
+            associativity: Associativity::Left,
+            complexity: 1,
+            compute_fn: |arguments| arguments[0] - arguments[1],
+        }
+    }
+
+    fn create_asterisk_operator() -> Operator {
+        Operator {
+            name: String::from("*"),
+            arguments_number: 2,
+            precedence: 2,
+            associativity: Associativity::Left,
+            complexity: 2,
+            compute_fn: |arguments| arguments[0] * arguments[1],
+        }
+    }
+
+    fn create_slash_operator() -> Operator {
+        Operator {
+            name: String::from("/"),
+            arguments_number: 2,
+            precedence: 2,
+            associativity: Associativity::Left,
+            complexity: 2,
+            compute_fn: |arguments| arguments[0] / arguments[1],
+        }
+    }
+
+    fn create_circumflex_operator() -> Operator {
+        Operator {
+            name: String::from("^"),
+            arguments_number: 2,
+            precedence: 3,
+            associativity: Associativity::Right,
+            complexity: 3,
+            compute_fn: |arguments| arguments[0].powf(arguments[1]),
         }
     }
 }
