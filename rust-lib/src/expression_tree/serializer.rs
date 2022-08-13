@@ -65,7 +65,7 @@ mod tests {
             }),
             variables: vec![String::from("x")],
         };
-        let expected_json = "{\"root\":{\"log\":[10.0,{\"+\":[\"x\",2.0]}]},\"variables\":[\"x\"]}";
+        let expected_json = r#"{"root":{"log":[10.0,{"+":["x",2.0]}]},"variables":["x"]}"#;
         let actual_json = serde_json::to_string(&tree)?;
         assert_eq!(expected_json, actual_json);
         Ok(())
