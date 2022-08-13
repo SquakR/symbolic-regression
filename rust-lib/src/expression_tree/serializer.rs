@@ -1,6 +1,6 @@
-//! Types serializers module.
-use crate::expression_tree::{Node, OperationNode, ValueNode};
-use crate::types::Operation;
+//! Expression tree types serializers module.
+use super::types::{Node, OperationNode, ValueNode};
+use crate::model::settings::Operation;
 use serde::ser::{Serialize, SerializeMap, Serializer};
 
 impl Serialize for ValueNode {
@@ -41,13 +41,13 @@ impl Serialize for Node {
 
 #[cfg(test)]
 mod tests {
+    use super::super::types::ExpressionTree;
     use super::*;
-    use crate::expression_tree::ExpressionTree;
-    use crate::settings::Settings;
+    use crate::model::settings::Settings;
     use serde_json::{self, Error};
 
     #[test]
-    fn test_expression_tree_serialize_to_json() -> Result<(), Error> {
+    fn test_serialize_expression_tree_to_json() -> Result<(), Error> {
         let settings = Settings::default();
         let tree = ExpressionTree {
             root: Node::Function(OperationNode {

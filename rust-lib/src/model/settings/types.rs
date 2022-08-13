@@ -1,5 +1,5 @@
-//! Module with common types.
-use crate::expression_tree::{Node, OperationNode};
+//! Module with settings types.
+use crate::expression_tree::types::{Node, OperationNode};
 use std::cmp::Ordering;
 use std::cmp::PartialEq;
 use std::fmt;
@@ -302,7 +302,7 @@ mod tests {
 
     mod converter_tests {
         use super::*;
-        use crate::expression_tree::ValueNode;
+        use crate::expression_tree::types::ValueNode;
         use std::f64::consts::E;
 
         #[test]
