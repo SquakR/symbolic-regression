@@ -12,47 +12,6 @@ pub struct ExpressionTree {
     pub variables: Vec<String>,
 }
 
-pub trait Computable {
-    /// Compute a node by computing all child nodes and performing a node operation.
-    /// Return `ComputeError` if some node contains a variable instead of a constant.
-    /// For computation, the idea of ​​the composite pattern is used.
-    fn compute(&self) -> Result<f64, ComputeError>;
-    /// Simplify a node by replacing all child nodes that can be computed with values.
-    /// For example, sin(x + 2,0 * (3.0 + 2.0)) -> sin(x + 14.0)
-    fn simplify(&mut self) -> ();
-}
-
-#[derive(Debug, Clone)]
-pub struct ComputeError {
-    pub message: String,
-}
-
-impl ComputeError {
-    fn new(variable: &str) -> ComputeError {
-        ComputeError {
-            message: format!("{} variable is not a constant.", variable),
-        }
-    }
-}
-
-impl Computable for ExpressionTree {
-    fn compute(&self) -> Result<f64, ComputeError> {
-        self.root.compute()
-    }
-    fn simplify(&mut self) -> () {
-        match self.compute() {
-            Ok(value) => self.root = Node::Value(ValueNode::Constant(value)),
-            Err(_) => self.root.simplify(),
-        }
-    }
-}
-
-impl fmt::Display for ExpressionTree {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.root)
-    }
-}
-
 impl ExpressionTree {
     /// Return a new ExpressionTree where variables have been replaced with values from the `variables` HashMap.
     /// Panic if `variables` HaspMap contains non-existing variables.
@@ -137,6 +96,47 @@ impl ExpressionTree {
                 output_data.to_node()
             }
             Node::Value(value_node) => Node::Value(value_node.clone()),
+        }
+    }
+}
+
+pub trait Computable {
+    /// Compute a node by computing all child nodes and performing a node operation.
+    /// Return `ComputeError` if some node contains a variable instead of a constant.
+    /// For computation, the idea of ​​the composite pattern is used.
+    fn compute(&self) -> Result<f64, ComputeError>;
+    /// Simplify a node by replacing all child nodes that can be computed with values.
+    /// For example, sin(x + 2,0 * (3.0 + 2.0)) -> sin(x + 14.0)
+    fn simplify(&mut self) -> ();
+}
+
+#[derive(Debug, Clone)]
+pub struct ComputeError {
+    pub message: String,
+}
+
+impl ComputeError {
+    fn new(variable: &str) -> ComputeError {
+        ComputeError {
+            message: format!("{} variable is not a constant.", variable),
+        }
+    }
+}
+
+impl fmt::Display for ExpressionTree {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.root)
+    }
+}
+
+impl Computable for ExpressionTree {
+    fn compute(&self) -> Result<f64, ComputeError> {
+        self.root.compute()
+    }
+    fn simplify(&mut self) -> () {
+        match self.compute() {
+            Ok(value) => self.root = Node::Value(ValueNode::Constant(value)),
+            Err(_) => self.root.simplify(),
         }
     }
 }

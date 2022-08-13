@@ -14,6 +14,64 @@ impl<'a> ExpressionTree {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ParseError {
+    MissingCommaOrOpeningBracketError(MissingCommaOrOpeningBracketError),
+    MissingCommaError(MissingCommaError),
+    InvalidArgumentsNumberError(InvalidArgumentsNumberError),
+    EmptyFormulaError,
+    MultipleFormulaError,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MissingCommaOrOpeningBracketError {
+    pub data: ErrorTokenData,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MissingCommaError {
+    pub data: ErrorTokenData,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct InvalidArgumentsNumberError {
+    pub data: ErrorTokenData,
+    pub expected: usize,
+    pub actual: usize,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ErrorTokenData {
+    pub string: String,
+    pub position: usize,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseError::MissingCommaOrOpeningBracketError(err) =>
+                write!(
+                    f,
+                    "Missing comma or opening bracket at position {}. The token string is \"{}\".",
+                    err.data.position, err.data.string
+                ),
+            ParseError::MissingCommaError(err) =>
+                write!(
+                    f,
+                    "Missing comma error at position {}. The token string is \"{}\".",
+                    err.data.position, err.data.string
+                ),
+            ParseError::InvalidArgumentsNumberError(err) => write!(
+                f,
+                "Invalid number of arguments at position {}, expected {}, but actually {}. Token string is \"{}\".",
+                err.data.position, err.expected, err.actual, err.data.string
+            ),
+            ParseError::EmptyFormulaError => write!(f, "The formula is empty."),
+            ParseError::MultipleFormulaError => write!(f, "The formula is multiple."),
+        }
+    }
+}
+
 struct Parser<'a> {
     expression: String,
     settings: &'a Settings,
@@ -370,64 +428,6 @@ impl<'a> Parser<'a> {
             }
         }
     }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ParseError {
-    MissingCommaOrOpeningBracketError(MissingCommaOrOpeningBracketError),
-    MissingCommaError(MissingCommaError),
-    InvalidArgumentsNumberError(InvalidArgumentsNumberError),
-    EmptyFormulaError,
-    MultipleFormulaError,
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::MissingCommaOrOpeningBracketError(err) =>
-                write!(
-                    f,
-                    "Missing comma or opening bracket at position {}. The token string is \"{}\".",
-                    err.data.position, err.data.string
-                ),
-            ParseError::MissingCommaError(err) =>
-                write!(
-                    f,
-                    "Missing comma error at position {}. The token string is \"{}\".",
-                    err.data.position, err.data.string
-                ),
-            ParseError::InvalidArgumentsNumberError(err) => write!(
-                f,
-                "Invalid number of arguments at position {}, expected {}, but actually {}. Token string is \"{}\".",
-                err.data.position, err.expected, err.actual, err.data.string
-            ),
-            ParseError::EmptyFormulaError => write!(f, "The formula is empty."),
-            ParseError::MultipleFormulaError => write!(f, "The formula is multiple."),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct MissingCommaOrOpeningBracketError {
-    pub data: ErrorTokenData,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct MissingCommaError {
-    pub data: ErrorTokenData,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct InvalidArgumentsNumberError {
-    pub data: ErrorTokenData,
-    pub expected: usize,
-    pub actual: usize,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ErrorTokenData {
-    pub string: String,
-    pub position: usize,
 }
 
 #[derive(Debug, PartialEq)]
