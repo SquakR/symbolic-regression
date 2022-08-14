@@ -1,4 +1,5 @@
 //! Input data module.
+use calamine::{DataType, Range};
 use serde::{Deserialize, Serialize};
 use serde_json::Error as ServeJsonError;
 use std::collections::{BTreeMap, HashMap};
@@ -16,7 +17,9 @@ impl InputData {
     pub fn new(variables: Vec<String>, rows: Vec<Vec<f64>>) -> Result<InputData, InputDataError> {
         if variables.len() < 2 {
             return Err(InputDataError {
-                message: String::from("The \"InputData\" struct must contain at least two variables, of which the last variable is output one.")
+                message: String::from(
+                    r#"The "InputData" struct must contain at least two variables, of which the last variable is output one."#,
+                ),
             });
         }
         let mut variables_count = HashMap::new();
@@ -27,7 +30,7 @@ impl InputData {
         for (variable, value) in variables_count {
             if value > 1 {
                 return Err(InputDataError {
-                    message: format!("The variable \"{}\" occurs {} times.", variable, value),
+                    message: format!(r#"The variable "{}" occurs {} times."#, variable, value),
                 });
             }
         }
@@ -64,7 +67,7 @@ impl InputData {
                     if value.len() < max_len {
                         return Err(FromJsonError::InputDataError(InputDataError {
                             message: format!(
-                                "The variable \"{}\" contains {} values, but must contain {}.",
+                                r#"The variable "{}" contains {} values, but must contain {}."#,
                                 variable,
                                 value.len(),
                                 max_len
@@ -82,6 +85,65 @@ impl InputData {
             }
             Err(err) => Err(FromJsonError::ServeJsonError(err)),
         }
+    }
+    /// Crete new InputData from Excel worksheet.
+    pub fn from_worksheet_range(range: Range<DataType>) -> Result<InputData, InputDataError> {
+        let mut rows_iterator = range.rows();
+        let variables = match rows_iterator.next() {
+            Some(variable_row) => {
+                let mut variables = vec![];
+                for (i, cell) in variable_row.iter().enumerate() {
+                    match cell {
+                        DataType::String(variable) => variables.push(variable.to_owned()),
+                        _ => {
+                            return Err(InputDataError {
+                                message: format!(
+                                    "Wrong cell type in the variables header at {} index.",
+                                    i
+                                ),
+                            })
+                        }
+                    }
+                }
+                variables
+            }
+            None => {
+                return Err(InputDataError {
+                    message: String::from("The worksheet must contain a rows."),
+                })
+            }
+        };
+        let mut rows = vec![];
+        for (i, values_row) in rows_iterator.enumerate() {
+            let mut row = vec![];
+            for (j, cell) in values_row.iter().enumerate() {
+                match cell {
+                    DataType::Int(value) => row.push(*value as f64),
+                    DataType::Float(value) => row.push(*value),
+                    DataType::String(value) => match value.parse::<f64>() {
+                        Ok(value) => row.push(value),
+                        Err(_) => {
+                            return Err(InputDataError {
+                                message: format!(
+                                    "Wrong cell type at index {} in the row at index {}.",
+                                    j, i
+                                ),
+                            })
+                        }
+                    },
+                    _ => {
+                        return Err(InputDataError {
+                            message: format!(
+                                "Wrong cell type at index {} in the row at index {}.",
+                                j, i
+                            ),
+                        })
+                    }
+                };
+            }
+            rows.push(row)
+        }
+        InputData::new(variables, rows)
     }
 }
 
@@ -124,6 +186,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use calamine::{Range, Reader, Xlsx};
+    use std::path::PathBuf;
 
     #[test]
     fn test_new_valid() -> Result<(), InputDataError> {
@@ -142,21 +206,23 @@ mod tests {
     #[test]
     fn test_new_invalid_not_enough_variables() {
         let expected_error = InputDataError {
-            message: String::from("The \"InputData\" struct must contain at least two variables, of which the last variable is output one.")
+            message: String::from(
+                r#"The "InputData" struct must contain at least two variables, of which the last variable is output one."#,
+            ),
         };
         match InputData::new(vec![String::from("x")], vec![vec![1.0], vec![2.0]]) {
             Ok(input_data) => panic!(
                 "Expected {:?} error, but {:?} was received.",
                 expected_error, input_data
             ),
-            Err(err) => assert_eq!(expected_error, err),
+            Err(actual_error) => assert_eq!(expected_error, actual_error),
         };
     }
 
     #[test]
     fn test_new_invalid_duplicate_variable() {
         let expected_error = InputDataError {
-            message: String::from("The variable \"x1\" occurs 2 times."),
+            message: String::from(r#"The variable "x1" occurs 2 times."#),
         };
         match InputData::new(
             vec![String::from("x1"), String::from("x2"), String::from("x1")],
@@ -170,7 +236,7 @@ mod tests {
                 "Expected {:?} error, but {:?} was received.",
                 expected_error, input_data
             ),
-            Err(err) => assert_eq!(expected_error, err),
+            Err(actual_error) => assert_eq!(expected_error, actual_error),
         }
     }
 
@@ -187,12 +253,12 @@ mod tests {
                 "Expected {:?} error, but {:?} was received.",
                 expected_error, input_data
             ),
-            Err(err) => assert_eq!(expected_error, err),
+            Err(actual_error) => assert_eq!(expected_error, actual_error),
         };
     }
 
     #[test]
-    fn test_from_json_valid() -> Result<(), FromJsonError> {
+    fn test_from_json() -> Result<(), FromJsonError> {
         for json in [
             r#"{
                 "variables": ["x1", "x2", "y"],
@@ -236,13 +302,13 @@ mod tests {
                 "Expected {:?} error, but {:?} was received.",
                 expected_error, input_data
             ),
-            Err(err) => {
-                if let FromJsonError::InputDataError(err) = &err {
-                    assert_eq!(expected_error, *err);
+            Err(actual_error) => {
+                if let FromJsonError::InputDataError(actual_error) = &actual_error {
+                    assert_eq!(expected_error, *actual_error);
                 } else {
                     panic!(
                         "Expected {:?} error, but {:?} was received.",
-                        expected_error, err
+                        expected_error, actual_error
                     );
                 }
             }
@@ -252,7 +318,7 @@ mod tests {
     #[test]
     fn test_from_json_variables_map_form_invalid() {
         let expected_error = InputDataError {
-            message: String::from("The variable \"x2\" contains 2 values, but must contain 3."),
+            message: String::from(r#"The variable "x2" contains 2 values, but must contain 3."#),
         };
         match InputData::from_json(
             r#"{
@@ -265,13 +331,13 @@ mod tests {
                 "Expected {:?} error, but {:?} was received.",
                 expected_error, input_data
             ),
-            Err(err) => {
-                if let FromJsonError::InputDataError(err) = &err {
-                    assert_eq!(expected_error, *err);
+            Err(actual_error) => {
+                if let FromJsonError::InputDataError(actual_error) = &actual_error {
+                    assert_eq!(expected_error, *actual_error);
                 } else {
                     panic!(
                         "Expected {:?} error, but {:?} was received.",
-                        expected_error, err
+                        expected_error, actual_error
                     );
                 }
             }
@@ -279,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn test_from_json_invalid_form() {
+    fn test_from_json_wrong_form() {
         match InputData::from_json(
             r#"{
                 "x1": [1, 1.0],
@@ -288,14 +354,14 @@ mod tests {
             }"#,
         ) {
             Ok(input_data) => panic!(
-                "Expected \"ServeJsonError\" error, but {:?} was received.",
+                r#"Expected "ServeJsonError" error, but {:?} was received."#,
                 input_data
             ),
-            Err(err) => {
-                if let FromJsonError::InputDataError(err) = err {
+            Err(actual_error) => {
+                if let FromJsonError::InputDataError(actual_error) = actual_error {
                     panic!(
-                        "Expected \"ServeJsonError\" error, but {:?} was received.",
-                        err
+                        r#"Expected "ServeJsonError" error, but {:?} was received."#,
+                        actual_error
                     )
                 }
             }
@@ -303,9 +369,61 @@ mod tests {
     }
 
     #[test]
+    fn test_from_worksheet_range() -> Result<(), InputDataError> {
+        let actual_input_data =
+            InputData::from_worksheet_range(get_worksheet("resources/input_data.xlsx"))?;
+        let expected_input_data = InputData {
+            variables: vec![String::from("x1"), String::from("x2"), String::from("y")],
+            rows: vec![vec![1.0, 2.0, 3.0], vec![1.0, -1.0, 0.0]],
+        };
+        assert_eq!(expected_input_data, actual_input_data);
+        Ok(())
+    }
+
+    #[test]
+    fn test_from_worksheet_range_error() {
+        for (error_message, path) in [
+            (
+                "The worksheet must contain a rows.",
+                "resources/input_data_without_rows.xlsx",
+            ),
+            (
+                "Wrong cell type in the variables header at 1 index.",
+                "resources/input_data_wrong_header.xlsx",
+            ),
+            (
+                "Wrong cell type at index 1 in the row at index 1.",
+                "resources/input_data_wrong_cell.xlsx",
+            ),
+            (
+                r#"The "InputData" struct must contain at least two variables, of which the last variable is output one."#,
+                "resources/input_data_wrong_row.xlsx",
+            ),
+        ] {
+            let expected_error = InputDataError {
+                message: String::from(error_message),
+            };
+            match InputData::from_worksheet_range(get_worksheet(path)) {
+                Ok(input_data) => panic!(
+                    "Expected {:?} error, but {:?} was received.",
+                    expected_error, input_data
+                ),
+                Err(actual_error) => assert_eq!(expected_error, actual_error),
+            }
+        }
+    }
+
+    #[test]
     fn test_transpose() {
         let actual_vec = transpose(vec![vec![1, 2], vec![3, 4], vec![5, 6]]);
         let expected_vec = vec![vec![1, 3, 5], vec![2, 4, 6]];
         assert_eq!(expected_vec, actual_vec);
+    }
+
+    fn get_worksheet(path: &str) -> Range<DataType> {
+        let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path_buf.push(path);
+        let mut workbook: Xlsx<_> = calamine::open_workbook(path_buf).unwrap();
+        workbook.worksheet_range("Sheet1").unwrap().unwrap()
     }
 }
