@@ -9,6 +9,8 @@ pub struct Settings {
     pub operators: Vec<Rc<Operator>>,
     pub functions: Vec<Rc<Function>>,
     pub converters: Vec<Converter>,
+    pub variable_complexity: u32,
+    pub constant_complexity: u32,
 }
 
 impl Settings {

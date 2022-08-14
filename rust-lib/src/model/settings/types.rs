@@ -8,6 +8,7 @@ use std::rc::Rc;
 pub trait Operation {
     fn compute(&self, arguments: &[f64]) -> f64;
     fn get_name(&self) -> &str;
+    fn get_complexity(&self) -> u32;
 }
 
 #[derive(Clone)]
@@ -34,6 +35,9 @@ impl Operation for Operator {
     }
     fn get_name(&self) -> &str {
         self.name.as_str()
+    }
+    fn get_complexity(&self) -> u32 {
+        self.complexity
     }
 }
 
@@ -96,6 +100,9 @@ impl Operation for Function {
     }
     fn get_name(&self) -> &str {
         self.name.as_str()
+    }
+    fn get_complexity(&self) -> u32 {
+        self.complexity
     }
 }
 

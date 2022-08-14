@@ -11,6 +11,8 @@ impl Settings {
             operators: vec![],
             functions: vec![],
             converters: vec![],
+            variable_complexity: 1,
+            constant_complexity: 1,
         };
         settings.set_default_operators();
         settings.set_default_functions();
