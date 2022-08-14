@@ -12,7 +12,7 @@ pub trait Computable {
     fn simplify(&mut self) -> ();
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComputeError {
     pub message: String,
 }
@@ -20,7 +20,7 @@ pub struct ComputeError {
 impl ComputeError {
     fn new(variable: &str) -> ComputeError {
         ComputeError {
-            message: format!("{} variable is not a constant.", variable),
+            message: format!(r#"The "{}" variable is not a constant."#, variable),
         }
     }
 }
@@ -97,9 +97,13 @@ mod tests {
 
     #[test]
     fn test_value_variable_compute() {
-        if let Ok(_) = ValueNode::Variable(String::from("x")).compute() {
-            panic!("Computing a value with a variable must return a `ComputeError`.");
-        }
+        let expected_error = ComputeError {
+            message: String::from(r#"The "x" variable is not a constant."#),
+        };
+        match ValueNode::Variable(String::from("x")).compute() {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(actual_error) => assert_eq!(expected_error, actual_error),
+        };
     }
 
     #[test]

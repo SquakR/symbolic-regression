@@ -6,13 +6,13 @@ use std::rc::Rc;
 impl ExpressionTree {
     /// Return a new ExpressionTree where variables have been replaced with values from the `variables` HashMap.
     /// Panic if `variables` HaspMap contains non-existing variables.
-    pub fn subs(&self, variables: &HashMap<&str, f64>) -> ExpressionTree {
+    pub fn subs(&self, variables: &HashMap<&str, f64>) -> Result<ExpressionTree, SubsError> {
         for &key in variables.keys() {
             if !self.variables.iter().any(|variable| variable == key) {
-                panic!("Expression tree does not contain \"{}\" variable.", key);
+                return Err(SubsError::new(key));
             }
         }
-        ExpressionTree {
+        Ok(ExpressionTree {
             root: ExpressionTree::subs_node(&self.root, variables),
             variables: self
                 .variables
@@ -20,7 +20,7 @@ impl ExpressionTree {
                 .into_iter()
                 .filter(|variable| !variables.keys().any(|key| key == variable))
                 .collect(),
-        }
+        })
     }
     fn subs_node(node: &Node, variables: &HashMap<&str, f64>) -> Node {
         match node {
@@ -51,17 +51,38 @@ impl ExpressionTree {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubsError {
+    pub message: String,
+}
+
+impl SubsError {
+    fn new(variable: &str) -> SubsError {
+        SubsError {
+            message: format!(
+                r#"Expression tree does not contain "{}" variable."#,
+                variable
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::settings::Settings;
 
     #[test]
-    #[should_panic(expected = "Expression tree does not contain \"y\" variable.")]
     fn test_subs_panics_with_wrong_variable() {
         let settings = Settings::default();
         let tree = create_tree_to_subs(&settings);
-        tree.subs(&HashMap::from([("y", 2.0)]));
+        let expected_error = SubsError {
+            message: String::from(r#"Expression tree does not contain "y" variable."#),
+        };
+        match tree.subs(&HashMap::from([("y", 2.0)])) {
+            Ok(_) => panic!("Expected {:?}, but Ok(()) was received.", expected_error),
+            Err(actual_error) => assert_eq!(expected_error, actual_error),
+        }
     }
 
     #[test]
@@ -84,8 +105,10 @@ mod tests {
             }),
             variables: vec![String::from("x2")],
         };
-        let actual_tree = tree.subs(&HashMap::from([("x1", 2.0)]));
-        assert_eq!(expected_tree, actual_tree);
+        match tree.subs(&HashMap::from([("x1", 2.0)])) {
+            Ok(actual_tree) => assert_eq!(expected_tree, actual_tree),
+            Err(err) => panic!("Expected {:?}, but got {:?}.", expected_tree, err),
+        };
     }
 
     fn create_tree_to_subs(settings: &Settings) -> ExpressionTree {
