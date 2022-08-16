@@ -5,6 +5,7 @@ pub mod output;
 pub mod parser;
 pub mod serializer;
 pub mod subs;
+pub mod traversal;
 pub mod types;
 
 pub use compute::*;
@@ -13,4 +14,5 @@ pub use output::*;
 pub use parser::*;
 pub use serializer::*;
 pub use subs::*;
+pub use traversal::*;
 pub use types::*;
