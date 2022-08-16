@@ -86,7 +86,7 @@ mod tests {
     }
 
     #[test]
-    fn test_subs_x1_variable() {
+    fn test_subs_x1_variable() -> Result<(), SubsError> {
         let settings = Settings::default();
         let tree = create_tree_to_subs(&settings);
         let expected_tree = ExpressionTree {
@@ -105,10 +105,9 @@ mod tests {
             }),
             variables: vec![String::from("x2")],
         };
-        match tree.subs(&HashMap::from([("x1", 2.0)])) {
-            Ok(actual_tree) => assert_eq!(expected_tree, actual_tree),
-            Err(err) => panic!("Expected {:?}, but got {:?}.", expected_tree, err),
-        };
+        let actual_tree = tree.subs(&HashMap::from([("x1", 2.0)]))?;
+        assert_eq!(expected_tree, actual_tree);
+        Ok(())
     }
 
     fn create_tree_to_subs(settings: &Settings) -> ExpressionTree {
