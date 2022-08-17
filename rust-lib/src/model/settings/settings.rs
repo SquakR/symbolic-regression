@@ -3,15 +3,26 @@ use super::types::{ConvertOutputData, Converter, ConverterOperation};
 use crate::expression_tree::{Function, Node, Operation, Operator};
 use std::rc::Rc;
 
+#[derive(Debug, PartialEq)]
+pub struct NodeProbability {
+    pub operator_node: f64,
+    pub function_node: f64,
+    pub value_node: f64,
+}
+
 pub struct Settings {
     pub operators: Vec<Rc<Operator>>,
     pub functions: Vec<Rc<Function>>,
     pub converters: Vec<Converter>,
     pub variable_complexity: u32,
     pub constant_complexity: u32,
+    pub get_node_probability_fn: fn(tree_complexity: u32) -> NodeProbability,
 }
 
 impl Settings {
+    pub fn get_node_probability(&self, tree_complexity: u32) -> NodeProbability {
+        (self.get_node_probability_fn)(tree_complexity)
+    }
     pub fn find_function_by_name(&self, name: &str) -> Option<Rc<Function>> {
         for function in &self.functions {
             if function.get_name() == name {

@@ -1,5 +1,5 @@
 //! Module for getting default settings.
-use super::settings::Settings;
+use super::settings::{NodeProbability, Settings};
 use super::types::{Converter, ConverterOperation};
 use crate::expression_tree::{Associativity, Function, Node, Operator, ValueNode};
 use std::f64::{consts::E, consts::PI, NAN};
@@ -13,6 +13,14 @@ impl Settings {
             converters: vec![],
             variable_complexity: 1,
             constant_complexity: 1,
+            get_node_probability_fn: |tree_complexity| {
+                let operation_node_probability = 2.0 / tree_complexity as f64;
+                NodeProbability {
+                    operator_node: operation_node_probability,
+                    function_node: operation_node_probability,
+                    value_node: 1.0 - operation_node_probability * 2.0,
+                }
+            },
         };
         settings.converters = settings.get_default_converters();
         settings
@@ -293,5 +301,22 @@ impl Settings {
                 },
             },
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_node_probability_fn() {
+        let settings = Settings::default();
+        let expected_node_probability = NodeProbability {
+            operator_node: 0.2,
+            function_node: 0.2,
+            value_node: 0.6,
+        };
+        let actual_node_probability = settings.get_node_probability(10);
+        assert_eq!(expected_node_probability, actual_node_probability);
     }
 }
