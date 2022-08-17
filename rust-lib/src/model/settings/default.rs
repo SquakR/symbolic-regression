@@ -1,26 +1,24 @@
 //! Module for getting default settings.
 use super::settings::Settings;
-use super::types::{Associativity, Converter, ConverterOperation, Function, Operator};
-use crate::expression_tree::{Node, ValueNode};
+use super::types::{Converter, ConverterOperation};
+use crate::expression_tree::{Associativity, Function, Node, Operator, ValueNode};
 use std::f64::{consts::E, consts::PI, NAN};
 use std::rc::Rc;
 
 impl Settings {
     pub fn default() -> Settings {
         let mut settings = Settings {
-            operators: vec![],
-            functions: vec![],
+            operators: Settings::get_default_operators(),
+            functions: Settings::get_default_functions(),
             converters: vec![],
             variable_complexity: 1,
             constant_complexity: 1,
         };
-        settings.set_default_operators();
-        settings.set_default_functions();
-        settings.set_default_converters();
+        settings.converters = settings.get_default_converters();
         settings
     }
-    pub fn set_default_operators(&mut self) {
-        self.operators = vec![
+    pub fn get_default_operators() -> Vec<Rc<Operator>> {
+        vec![
             Rc::new(Operator {
                 name: String::from("+"),
                 arguments_number: 2,
@@ -77,10 +75,10 @@ impl Settings {
                 complexity: 1,
                 compute_fn: |arguments| -arguments[0],
             }),
-        ];
+        ]
     }
-    pub fn set_default_functions(&mut self) {
-        self.functions = vec![
+    pub fn get_default_functions() -> Vec<Rc<Function>> {
+        vec![
             Rc::new(Function {
                 name: String::from("abs"),
                 arguments_number: 1,
@@ -213,15 +211,15 @@ impl Settings {
                 complexity: 3,
                 compute_fn: |arguments| arguments[0].sqrt(),
             }),
-        ];
+        ]
     }
-    pub fn set_default_converters(&mut self) {
+    pub fn get_default_converters(&self) -> Vec<Converter> {
         let circumflex = self.find_binary_operator_by_name("^").unwrap();
         let log = self.find_function_by_name("log").unwrap();
         let ln = self.find_function_by_name("ln").unwrap();
         let exp = self.find_function_by_name("exp").unwrap();
         let sqrt = self.find_function_by_name("sqrt").unwrap();
-        self.converters = vec![
+        vec![
             Converter {
                 from: ConverterOperation::Function(Rc::clone(&ln)),
                 to: ConverterOperation::Function(Rc::clone(&log)),
@@ -294,6 +292,6 @@ impl Settings {
                     arguments
                 },
             },
-        ];
+        ]
     }
 }

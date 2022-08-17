@@ -1,8 +1,6 @@
 //! Settings core functionality module.
-use super::types::{
-    ConvertOutputData, Converter, ConverterOperation, Function, Operation, Operator,
-};
-use crate::expression_tree::Node;
+use super::types::{ConvertOutputData, Converter, ConverterOperation};
+use crate::expression_tree::{Function, Node, Operation, Operator};
 use std::rc::Rc;
 
 pub struct Settings {

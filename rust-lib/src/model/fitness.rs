@@ -1,8 +1,8 @@
 //! Expression tree fitness module.
 use super::input_data::InputData;
-use super::settings::{Operation, Settings};
+use super::settings::Settings;
 use crate::expression_tree::{
-    Computable, ComputeError, ExpressionTree, Node, OperationNode, SubsError, ValueNode,
+    Computable, ComputeError, ExpressionTree, Node, Operation, OperationNode, SubsError, ValueNode,
 };
 use std::collections::HashMap;
 

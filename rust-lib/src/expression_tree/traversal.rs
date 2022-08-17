@@ -171,9 +171,9 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::{OperationNode, ValueNode};
+    use super::super::types::{Operation, OperationNode, ValueNode};
     use super::*;
-    use crate::model::settings::{Operation, Settings};
+    use crate::model::settings::Settings;
 
     #[test]
     fn test_walk_pre_order() {

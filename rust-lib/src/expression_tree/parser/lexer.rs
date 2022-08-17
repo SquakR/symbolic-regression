@@ -1,6 +1,7 @@
 //! Lexer module.
+use super::super::types::{Function, Operator};
 use super::error::ErrorTokenData;
-use crate::model::settings::{Function, Operator, Settings};
+use crate::model::settings::Settings;
 use std::rc::Rc;
 
 pub struct Lexer<'a> {

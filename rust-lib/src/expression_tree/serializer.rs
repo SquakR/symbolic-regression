@@ -1,6 +1,5 @@
 //! Expression tree types serializers module.
-use super::types::{Node, OperationNode, ValueNode};
-use crate::model::settings::Operation;
+use super::types::{Node, Operation, OperationNode, ValueNode};
 use serde::ser::{Serialize, SerializeMap, Serializer};
 
 impl Serialize for ValueNode {

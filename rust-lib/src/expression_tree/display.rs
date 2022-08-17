@@ -1,6 +1,5 @@
 //! `Display` trait implementation for expression tree types.
-use super::types::{ExpressionTree, Node, OperationNode, ValueNode};
-use crate::model::settings::{Function, Operation, Operator};
+use super::types::{ExpressionTree, Function, Node, Operation, OperationNode, Operator, ValueNode};
 use std::fmt;
 
 impl fmt::Display for ExpressionTree {
@@ -82,6 +81,18 @@ impl fmt::Display for ValueNode {
     }
 }
 
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,6 +150,20 @@ mod tests {
             "(log(0.5, 1) * x1 / 1.5) ^ (2 ^ 2.5 * (3 + x2))",
             tree.to_string()
         );
+    }
+
+    #[test]
+    fn test_display_operator() {
+        let settings = Settings::default();
+        let plus_operator = settings.find_binary_operator_by_name("+").unwrap();
+        assert_eq!("+", format!("{}", plus_operator));
+    }
+
+    #[test]
+    fn test_display_function() {
+        let settings = Settings::default();
+        let sin_function = settings.find_function_by_name("sin").unwrap();
+        assert_eq!("sin", format!("{}", sin_function));
     }
 
     fn create_tree_to_display(settings: &Settings) -> ExpressionTree {

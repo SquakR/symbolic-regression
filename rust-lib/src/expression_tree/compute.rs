@@ -1,6 +1,5 @@
 //! Module for computing an expression tree.
-use super::types::{ExpressionTree, Node, OperationNode, ValueNode};
-use crate::model::settings::Operation;
+use super::types::{ExpressionTree, Node, Operation, OperationNode, ValueNode};
 
 pub trait Computable {
     /// Compute a node by computing all child nodes and performing a node operation.
