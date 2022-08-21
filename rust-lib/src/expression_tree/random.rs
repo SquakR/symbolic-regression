@@ -212,58 +212,58 @@ impl Node {
     }
 }
 
+pub struct MockRandom {
+    int: Option<Box<dyn Iterator<Item = usize>>>,
+    float: Option<Box<dyn Iterator<Item = f64>>>,
+    float_standard: Option<Box<dyn Iterator<Item = f64>>>,
+}
+
+impl MockRandom {
+    pub fn new(int: Vec<usize>, float: Vec<f64>, float_standard: Vec<f64>) -> MockRandom {
+        MockRandom {
+            int: Some(Box::new(int.into_iter().cycle())),
+            float: Some(Box::new(float.into_iter().cycle())),
+            float_standard: Some(Box::new(float_standard.into_iter().cycle())),
+        }
+    }
+    pub fn new_int(int: Vec<usize>) -> MockRandom {
+        MockRandom {
+            int: Some(Box::new(int.into_iter().cycle())),
+            float: None,
+            float_standard: None,
+        }
+    }
+}
+
+impl Random for MockRandom {
+    fn gen_float(&mut self) -> f64 {
+        match &mut self.float {
+            Some(float) => float.next().unwrap(),
+            None => unreachable!(),
+        }
+    }
+    fn gen_float_standard(&mut self) -> f64 {
+        match &mut self.float_standard {
+            Some(float_standard) => float_standard.next().unwrap(),
+            None => unreachable!(),
+        }
+    }
+    fn gen_range<R>(&mut self, _: R) -> usize
+    where
+        R: SampleRange<usize>,
+    {
+        match &mut self.int {
+            Some(int) => int.next().unwrap(),
+            None => unreachable!(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::types::{OperationNode, ValueNode};
     use super::*;
     use crate::model::settings::Settings;
-
-    struct MockRandom {
-        int: Option<Box<dyn Iterator<Item = usize>>>,
-        float: Option<Box<dyn Iterator<Item = f64>>>,
-        float_standard: Option<Box<dyn Iterator<Item = f64>>>,
-    }
-
-    impl MockRandom {
-        fn new(int: Vec<usize>, float: Vec<f64>, float_standard: Vec<f64>) -> MockRandom {
-            MockRandom {
-                int: Some(Box::new(int.into_iter().cycle())),
-                float: Some(Box::new(float.into_iter().cycle())),
-                float_standard: Some(Box::new(float_standard.into_iter().cycle())),
-            }
-        }
-        fn new_int(int: Vec<usize>) -> MockRandom {
-            MockRandom {
-                int: Some(Box::new(int.into_iter().cycle())),
-                float: None,
-                float_standard: None,
-            }
-        }
-    }
-
-    impl Random for MockRandom {
-        fn gen_float(&mut self) -> f64 {
-            match &mut self.float {
-                Some(float) => float.next().unwrap(),
-                None => unreachable!(),
-            }
-        }
-        fn gen_float_standard(&mut self) -> f64 {
-            match &mut self.float_standard {
-                Some(float_standard) => float_standard.next().unwrap(),
-                None => unreachable!(),
-            }
-        }
-        fn gen_range<R>(&mut self, _: R) -> usize
-        where
-            R: SampleRange<usize>,
-        {
-            match &mut self.int {
-                Some(int) => int.next().unwrap(),
-                None => unreachable!(),
-            }
-        }
-    }
 
     #[test]
     fn test_get_random_node() {
