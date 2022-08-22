@@ -25,7 +25,7 @@ impl ExpressionTree {
             complexity: self.get_complexity(settings),
         })
     }
-    fn get_error(&self, input_data: &InputData) -> Result<f64, FitnessError> {
+    pub fn get_error(&self, input_data: &InputData) -> Result<f64, FitnessError> {
         let mut error = 0.0;
         for row in &input_data.rows {
             let mut variables = HashMap::new();
@@ -50,7 +50,7 @@ impl ExpressionTree {
         }
         Ok(error)
     }
-    fn get_complexity(&self, settings: &Settings) -> u32 {
+    pub fn get_complexity(&self, settings: &Settings) -> u32 {
         self.root.get_complexity(settings)
     }
 }
@@ -62,7 +62,7 @@ pub enum FitnessError {
 }
 
 impl Node {
-    fn get_complexity(&self, settings: &Settings) -> u32 {
+    pub fn get_complexity(&self, settings: &Settings) -> u32 {
         match self {
             Node::Operator(operator_node) => operator_node.get_complexity(settings),
             Node::Function(function_node) => function_node.get_complexity(settings),
@@ -72,7 +72,7 @@ impl Node {
 }
 
 impl<T: Operation> OperationNode<T> {
-    fn get_complexity(&self, settings: &Settings) -> u32 {
+    pub fn get_complexity(&self, settings: &Settings) -> u32 {
         self.operation.get_complexity()
             + self
                 .arguments
@@ -83,7 +83,7 @@ impl<T: Operation> OperationNode<T> {
 }
 
 impl ValueNode {
-    fn get_complexity(&self, settings: &Settings) -> u32 {
+    pub fn get_complexity(&self, settings: &Settings) -> u32 {
         match self {
             ValueNode::Variable(_) => settings.variable_complexity,
             ValueNode::Constant(_) => settings.constant_complexity,

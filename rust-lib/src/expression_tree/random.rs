@@ -33,72 +33,93 @@ impl<G: Rng> Random for DefaultRandom<G> {
 
 impl ExpressionTree {
     pub fn create_random<R>(
-        rng: &mut R,
+        random: &mut R,
         settings: &Settings,
         variables: &[String],
     ) -> ExpressionTree
     where
         R: Random,
     {
-        let CreateRandomNodeResult { node, .. } = Node::create_random(rng, settings, variables, 0);
+        let CreateRandomNodeResult { node, .. } =
+            Node::create_random(random, settings, variables, 0);
         ExpressionTree {
             root: node,
             variables: variables.iter().cloned().collect::<Vec<String>>(),
         }
     }
-    pub fn get_random_node<R>(&self, rng: &mut R) -> &Node
+    pub fn get_random_node<R>(&self, random: &mut R) -> &Node
     where
         R: Random,
     {
-        self.get_node_at(rng.gen_range(0..self.count_nodes()))
+        self.get_node_at(random.gen_range(0..self.count_nodes()))
     }
-    pub fn get_random_node_mut<R>(&mut self, rng: &mut R) -> &mut Node
+    pub fn get_random_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
         R: Random,
     {
-        self.get_node_at_mut(rng.gen_range(0..self.count_nodes()))
+        self.get_node_at_mut(random.gen_range(0..self.count_nodes()))
     }
-    pub fn get_random_operator_node<R>(&self, rng: &mut R) -> &Node
+    pub fn get_random_operator_node<R>(&self, random: &mut R) -> &Node
     where
         R: Random,
     {
         let operator_node_indices = self.get_operator_node_indices();
-        self.get_node_at(operator_node_indices[rng.gen_range(0..operator_node_indices.len())])
+        self.get_node_at(operator_node_indices[random.gen_range(0..operator_node_indices.len())])
     }
-    pub fn get_random_operator_node_mut<R>(&mut self, rng: &mut R) -> &mut Node
+    pub fn get_random_operator_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
         R: Random,
     {
         let operator_node_indices = self.get_operator_node_indices();
-        self.get_node_at_mut(operator_node_indices[rng.gen_range(0..operator_node_indices.len())])
+        self.get_node_at_mut(
+            operator_node_indices[random.gen_range(0..operator_node_indices.len())],
+        )
     }
-    pub fn get_random_function_node<R>(&self, rng: &mut R) -> &Node
+    pub fn get_random_function_node<R>(&self, random: &mut R) -> &Node
     where
         R: Random,
     {
         let function_node_indices = self.get_function_node_indices();
-        self.get_node_at(function_node_indices[rng.gen_range(0..function_node_indices.len())])
+        self.get_node_at(function_node_indices[random.gen_range(0..function_node_indices.len())])
     }
-    pub fn get_random_function_node_mut<R>(&mut self, rng: &mut R) -> &mut Node
+    pub fn get_random_function_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
         R: Random,
     {
         let function_node_indices = self.get_function_node_indices();
-        self.get_node_at_mut(function_node_indices[rng.gen_range(0..function_node_indices.len())])
+        self.get_node_at_mut(
+            function_node_indices[random.gen_range(0..function_node_indices.len())],
+        )
     }
-    pub fn get_random_value_node<R>(&self, rng: &mut R) -> &Node
+    pub fn get_random_operation_node<R>(&self, random: &mut R) -> &Node
+    where
+        R: Random,
+    {
+        let mut indices = self.get_operator_node_indices();
+        indices.append(&mut self.get_function_node_indices());
+        self.get_node_at(indices[random.gen_range(0..indices.len())])
+    }
+    pub fn get_random_operation_node_mut<R>(&mut self, random: &mut R) -> &mut Node
+    where
+        R: Random,
+    {
+        let mut indices = self.get_operator_node_indices();
+        indices.append(&mut self.get_function_node_indices());
+        self.get_node_at_mut(indices[random.gen_range(0..indices.len())])
+    }
+    pub fn get_random_value_node<R>(&self, random: &mut R) -> &Node
     where
         R: Random,
     {
         let value_node_indices = self.get_value_node_indices();
-        self.get_node_at(value_node_indices[rng.gen_range(0..value_node_indices.len())])
+        self.get_node_at(value_node_indices[random.gen_range(0..value_node_indices.len())])
     }
-    pub fn get_random_value_node_mut<R>(&mut self, rng: &mut R) -> &mut Node
+    pub fn get_random_value_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
         R: Random,
     {
         let value_node_indices = self.get_value_node_indices();
-        self.get_node_at_mut(value_node_indices[rng.gen_range(0..value_node_indices.len())])
+        self.get_node_at_mut(value_node_indices[random.gen_range(0..value_node_indices.len())])
     }
 }
 
@@ -110,7 +131,7 @@ pub struct CreateRandomNodeResult {
 
 impl Node {
     pub fn create_random<R>(
-        rng: &mut R,
+        random: &mut R,
         settings: &Settings,
         variables: &[String],
         tree_complexity: u32,
@@ -121,17 +142,17 @@ impl Node {
         let node_probability = settings.get_node_probability(tree_complexity);
         let operator_node = node_probability.operator_node;
         let function_node = operator_node + node_probability.function_node;
-        let random = rng.gen_float_standard();
-        if random >= 0.0 && random < operator_node {
-            Node::create_random_operator(rng, settings, variables, tree_complexity)
-        } else if random >= operator_node && random < function_node {
-            Node::create_random_function(rng, settings, variables, tree_complexity)
+        let float_standard = random.gen_float_standard();
+        if float_standard >= 0.0 && float_standard < operator_node {
+            Node::create_random_operator(random, settings, variables, tree_complexity)
+        } else if float_standard >= operator_node && float_standard < function_node {
+            Node::create_random_function(random, settings, variables, tree_complexity)
         } else {
-            Node::create_random_value(rng, settings, variables)
+            Node::create_random_value(random, settings, variables)
         }
     }
-    fn create_random_operator<R>(
-        rng: &mut R,
+    pub fn create_random_operator<R>(
+        random: &mut R,
         settings: &Settings,
         variables: &[String],
         tree_complexity: u32,
@@ -139,13 +160,14 @@ impl Node {
     where
         R: Random,
     {
-        let operator = Rc::clone(&settings.operators[rng.gen_range(0..settings.operators.len())]);
+        let operator =
+            Rc::clone(&settings.operators[random.gen_range(0..settings.operators.len())]);
         let mut node_complexity = operator.get_complexity();
         let mut tree_complexity = tree_complexity + node_complexity;
         let arguments = (0..operator.arguments_number)
             .map(|_| {
                 let CreateRandomNodeResult { node, complexity } =
-                    Node::create_random(rng, settings, variables, tree_complexity);
+                    Node::create_random(random, settings, variables, tree_complexity);
                 node_complexity += complexity;
                 tree_complexity += complexity;
                 node
@@ -159,8 +181,8 @@ impl Node {
             complexity: node_complexity,
         }
     }
-    fn create_random_function<R>(
-        rng: &mut R,
+    pub fn create_random_function<R>(
+        random: &mut R,
         settings: &Settings,
         variables: &[String],
         tree_complexity: u32,
@@ -168,13 +190,14 @@ impl Node {
     where
         R: Random,
     {
-        let function = Rc::clone(&settings.functions[rng.gen_range(0..settings.functions.len())]);
+        let function =
+            Rc::clone(&settings.functions[random.gen_range(0..settings.functions.len())]);
         let mut node_complexity = function.get_complexity();
         let mut tree_complexity = tree_complexity + node_complexity;
         let arguments = (0..function.arguments_number)
             .map(|_| {
                 let CreateRandomNodeResult { node, complexity } =
-                    Node::create_random(rng, settings, variables, tree_complexity);
+                    Node::create_random(random, settings, variables, tree_complexity);
                 node_complexity += complexity;
                 tree_complexity += complexity;
                 node
@@ -188,24 +211,24 @@ impl Node {
             complexity: node_complexity,
         }
     }
-    fn create_random_value<R>(
-        rng: &mut R,
+    pub fn create_random_value<R>(
+        random: &mut R,
         settings: &Settings,
         variables: &[String],
     ) -> CreateRandomNodeResult
     where
         R: Random,
     {
-        if rng.gen_float_standard() < 0.5 {
+        if random.gen_float_standard() < 0.5 {
             CreateRandomNodeResult {
                 node: Node::Value(ValueNode::Variable(
-                    variables[rng.gen_range(0..variables.len())].to_owned(),
+                    variables[random.gen_range(0..variables.len())].to_owned(),
                 )),
                 complexity: settings.variable_complexity,
             }
         } else {
             CreateRandomNodeResult {
-                node: Node::Value(ValueNode::Constant(rng.gen_float())),
+                node: Node::Value(ValueNode::Constant(random.gen_float())),
                 complexity: settings.constant_complexity,
             }
         }
@@ -300,13 +323,7 @@ mod tests {
     fn test_get_random_operator_node_mut() {
         let settings = Settings::default();
         let mut expression_tree = create_test_expression_tree(&settings);
-        let mut expected_node = Node::Operator(OperationNode {
-            operation: settings.find_binary_operator_by_name("+").unwrap(),
-            arguments: vec![
-                Node::Value(ValueNode::Variable(String::from("x1"))),
-                Node::Value(ValueNode::Variable(String::from("x2"))),
-            ],
-        });
+        let mut expected_node = create_plus_node(&settings);
         let actual_node =
             expression_tree.get_random_operator_node_mut(&mut MockRandom::new_int(vec![2]));
         assert_eq!(&mut expected_node, actual_node);
@@ -326,18 +343,29 @@ mod tests {
     fn test_get_random_function_node_mut() {
         let settings = Settings::default();
         let mut expression_tree = create_test_expression_tree(&settings);
-        let mut expected_node = Node::Function(OperationNode {
-            operation: settings.find_function_by_name("cos").unwrap(),
-            arguments: vec![Node::Operator(OperationNode {
-                operation: settings.find_binary_operator_by_name("+").unwrap(),
-                arguments: vec![
-                    Node::Value(ValueNode::Variable(String::from("x1"))),
-                    Node::Value(ValueNode::Variable(String::from("x2"))),
-                ],
-            })],
-        });
+        let mut expected_node = create_cos_node(&settings);
         let actual_node =
             expression_tree.get_random_function_node_mut(&mut MockRandom::new_int(vec![1]));
+        assert_eq!(&mut expected_node, actual_node);
+    }
+
+    #[test]
+    fn test_get_random_operation_node() {
+        let settings = Settings::default();
+        let expression_tree = create_test_expression_tree(&settings);
+        let expected_node = create_plus_node(&settings);
+        let actual_node =
+            expression_tree.get_random_operation_node(&mut MockRandom::new_int(vec![2]));
+        assert_eq!(&expected_node, actual_node);
+    }
+
+    #[test]
+    fn test_get_random_operation_node_mut() {
+        let settings = Settings::default();
+        let mut expression_tree = create_test_expression_tree(&settings);
+        let mut expected_node = create_cos_node(&settings);
+        let actual_node =
+            expression_tree.get_random_operation_node_mut(&mut MockRandom::new_int(vec![4]));
         assert_eq!(&mut expected_node, actual_node);
     }
 
@@ -460,20 +488,28 @@ mod tests {
                             operation: settings.find_unary_operator_by_name("-").unwrap(),
                             arguments: vec![Node::Value(ValueNode::Constant(2.0))],
                         }),
-                        Node::Function(OperationNode {
-                            operation: settings.find_function_by_name("cos").unwrap(),
-                            arguments: vec![Node::Operator(OperationNode {
-                                operation: settings.find_binary_operator_by_name("+").unwrap(),
-                                arguments: vec![
-                                    Node::Value(ValueNode::Variable(String::from("x1"))),
-                                    Node::Value(ValueNode::Variable(String::from("x2"))),
-                                ],
-                            })],
-                        }),
+                        create_cos_node(settings),
                     ],
                 })],
             }),
             variables: vec![String::from("x1"), String::from("x2")],
         }
+    }
+
+    fn create_plus_node(settings: &Settings) -> Node {
+        Node::Operator(OperationNode {
+            operation: settings.find_binary_operator_by_name("+").unwrap(),
+            arguments: vec![
+                Node::Value(ValueNode::Variable(String::from("x1"))),
+                Node::Value(ValueNode::Variable(String::from("x2"))),
+            ],
+        })
+    }
+
+    fn create_cos_node(settings: &Settings) -> Node {
+        Node::Function(OperationNode {
+            operation: settings.find_function_by_name("cos").unwrap(),
+            arguments: vec![create_plus_node(settings)],
+        })
     }
 }

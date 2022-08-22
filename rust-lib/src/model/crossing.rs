@@ -4,7 +4,7 @@ use crate::expression_tree::{ExpressionTree, Random};
 pub fn cross<R>(
     expression_tree1: &ExpressionTree,
     expression_tree2: &ExpressionTree,
-    rng: &mut R,
+    random: &mut R,
 ) -> ExpressionTree
 where
     R: Random,
@@ -15,7 +15,7 @@ where
         expression_tree1.variables, expression_tree2.variables
     );
     let mut result_tree = expression_tree1.clone();
-    *result_tree.get_random_node_mut(rng) = expression_tree2.get_random_node(rng).clone();
+    *result_tree.get_random_node_mut(random) = expression_tree2.get_random_node(random).clone();
     result_tree
 }
 

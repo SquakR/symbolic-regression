@@ -23,6 +23,24 @@ pub struct OperationNode<T: Operation> {
     pub arguments: Vec<Node>,
 }
 
+impl<T: Operation> OperationNode<T> {
+    pub fn take_arguments(&mut self) -> Vec<Node> {
+        let mut arguments = vec![];
+        take_mut::take(self, |node| {
+            let OperationNode {
+                operation,
+                arguments: args,
+            } = node;
+            arguments = args;
+            OperationNode {
+                operation,
+                arguments: vec![],
+            }
+        });
+        arguments
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueNode {
     Variable(String),
@@ -151,6 +169,33 @@ mod tests {
     use super::*;
     use crate::model::settings::Settings;
 
+    #[test]
+    fn test_operation_node_take_arguments() {
+        let settings = Settings::default();
+        let mut operation_node = OperationNode {
+            operation: settings.find_binary_operator_by_name("+").unwrap(),
+            arguments: vec![
+                Node::Value(ValueNode::Constant(1.0)),
+                Node::Value(ValueNode::Variable(String::from("x"))),
+            ],
+        };
+        let arguments = operation_node.take_arguments();
+        assert_eq!(
+            OperationNode {
+                operation: settings.find_binary_operator_by_name("+").unwrap(),
+                arguments: vec![]
+            },
+            operation_node
+        );
+        assert_eq!(
+            vec![
+                Node::Value(ValueNode::Constant(1.0)),
+                Node::Value(ValueNode::Variable(String::from("x"))),
+            ],
+            arguments
+        );
+    }
+
     mod operator_tests {
         use super::*;
 
@@ -190,7 +235,7 @@ mod tests {
         }
 
         #[test]
-        fn test_operator_is_computed_before() {
+        fn test_is_computed_before() {
             let settings = Settings::default();
             let plus_operator = settings.find_binary_operator_by_name("+").unwrap();
             let minus_operator = settings.find_binary_operator_by_name("-").unwrap();
