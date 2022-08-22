@@ -17,14 +17,14 @@ impl Default for Settings {
             converters: vec![],
             variable_complexity: 1,
             constant_complexity: 1,
-            get_node_probability_fn: |tree_complexity| {
+            get_node_probability_fn: Box::new(|tree_complexity| {
                 let operation_node_probability = 4.0 / (tree_complexity + 9) as f64;
                 NodeProbability {
                     operator_node: operation_node_probability,
                     function_node: operation_node_probability,
                     value_node: 1.0 - operation_node_probability * 2.0,
                 }
-            },
+            }),
             mutations: vec![
                 Mutation {
                     mutation_fn: Box::new(|expression_tree, random, settings| {

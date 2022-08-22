@@ -32,7 +32,7 @@ pub struct Settings {
     pub converters: Vec<Converter>,
     pub variable_complexity: u32,
     pub constant_complexity: u32,
-    pub get_node_probability_fn: fn(tree_complexity: u32) -> NodeProbability,
+    pub get_node_probability_fn: Box<dyn Fn(u32) -> NodeProbability>,
     pub mutations: Vec<Mutation>,
 }
 
