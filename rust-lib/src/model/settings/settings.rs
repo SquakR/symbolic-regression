@@ -1,6 +1,6 @@
 //! Settings core functionality module.
 use super::types::{ConvertOutputData, Converter, ConverterOperation};
-use crate::expression_tree::{Function, Node, Operation, Operator};
+use crate::expression_tree::{ExpressionTree, Function, Node, Operation, Operator, Random};
 use std::rc::Rc;
 
 #[derive(Debug, PartialEq)]
@@ -10,6 +10,22 @@ pub struct NodeProbability {
     pub value_node: f64,
 }
 
+pub struct Mutation {
+    pub mutation_fn: Box<dyn Fn(&mut ExpressionTree, &mut dyn Random, &Settings)>,
+    pub probability: f64,
+}
+
+impl Mutation {
+    pub fn mutate<R: Random>(
+        &self,
+        expression_tree: &mut ExpressionTree,
+        random: &mut R,
+        settings: &Settings,
+    ) {
+        (self.mutation_fn)(expression_tree, random, settings);
+    }
+}
+
 pub struct Settings {
     pub operators: Vec<Rc<Operator>>,
     pub functions: Vec<Rc<Function>>,
@@ -17,6 +33,7 @@ pub struct Settings {
     pub variable_complexity: u32,
     pub constant_complexity: u32,
     pub get_node_probability_fn: fn(tree_complexity: u32) -> NodeProbability,
+    pub mutations: Vec<Mutation>,
 }
 
 impl Settings {

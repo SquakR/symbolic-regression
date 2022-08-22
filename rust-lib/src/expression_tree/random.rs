@@ -1,17 +1,15 @@
 //! Module with random operations on the expression tree.
 use super::types::{ExpressionTree, Node, Operation, OperationNode, ValueNode};
 use crate::model::settings::Settings;
-use rand::distributions::uniform::SampleRange;
 use rand::Rng;
 use std::f64::{MAX as F64MAX, MIN as F64MIN};
+use std::ops::Range;
 use std::rc::Rc;
 
 pub trait Random {
     fn gen_float(&mut self) -> f64;
     fn gen_float_standard(&mut self) -> f64;
-    fn gen_range<R>(&mut self, range: R) -> usize
-    where
-        R: SampleRange<usize>;
+    fn gen_range(&mut self, range: Range<usize>) -> usize;
 }
 
 pub struct DefaultRandom<G: Rng>(G);
@@ -23,10 +21,7 @@ impl<G: Rng> Random for DefaultRandom<G> {
     fn gen_float_standard(&mut self) -> f64 {
         self.0.gen()
     }
-    fn gen_range<R>(&mut self, range: R) -> usize
-    where
-        R: SampleRange<usize>,
-    {
+    fn gen_range(&mut self, range: Range<usize>) -> usize {
         self.0.gen_range(range)
     }
 }
@@ -38,7 +33,7 @@ impl ExpressionTree {
         variables: &[String],
     ) -> ExpressionTree
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let CreateRandomNodeResult { node, .. } =
             Node::create_random(random, settings, variables, 0);
@@ -49,26 +44,26 @@ impl ExpressionTree {
     }
     pub fn get_random_node<R>(&self, random: &mut R) -> &Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         self.get_node_at(random.gen_range(0..self.count_nodes()))
     }
     pub fn get_random_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         self.get_node_at_mut(random.gen_range(0..self.count_nodes()))
     }
     pub fn get_random_operator_node<R>(&self, random: &mut R) -> &Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let operator_node_indices = self.get_operator_node_indices();
         self.get_node_at(operator_node_indices[random.gen_range(0..operator_node_indices.len())])
     }
     pub fn get_random_operator_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let operator_node_indices = self.get_operator_node_indices();
         self.get_node_at_mut(
@@ -77,14 +72,14 @@ impl ExpressionTree {
     }
     pub fn get_random_function_node<R>(&self, random: &mut R) -> &Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let function_node_indices = self.get_function_node_indices();
         self.get_node_at(function_node_indices[random.gen_range(0..function_node_indices.len())])
     }
     pub fn get_random_function_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let function_node_indices = self.get_function_node_indices();
         self.get_node_at_mut(
@@ -93,7 +88,7 @@ impl ExpressionTree {
     }
     pub fn get_random_operation_node<R>(&self, random: &mut R) -> &Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let mut indices = self.get_operator_node_indices();
         indices.append(&mut self.get_function_node_indices());
@@ -101,7 +96,7 @@ impl ExpressionTree {
     }
     pub fn get_random_operation_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let mut indices = self.get_operator_node_indices();
         indices.append(&mut self.get_function_node_indices());
@@ -109,14 +104,14 @@ impl ExpressionTree {
     }
     pub fn get_random_value_node<R>(&self, random: &mut R) -> &Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let value_node_indices = self.get_value_node_indices();
         self.get_node_at(value_node_indices[random.gen_range(0..value_node_indices.len())])
     }
     pub fn get_random_value_node_mut<R>(&mut self, random: &mut R) -> &mut Node
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let value_node_indices = self.get_value_node_indices();
         self.get_node_at_mut(value_node_indices[random.gen_range(0..value_node_indices.len())])
@@ -137,7 +132,7 @@ impl Node {
         tree_complexity: u32,
     ) -> CreateRandomNodeResult
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let node_probability = settings.get_node_probability(tree_complexity);
         let operator_node = node_probability.operator_node;
@@ -158,7 +153,7 @@ impl Node {
         tree_complexity: u32,
     ) -> CreateRandomNodeResult
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let operator =
             Rc::clone(&settings.operators[random.gen_range(0..settings.operators.len())]);
@@ -188,7 +183,7 @@ impl Node {
         tree_complexity: u32,
     ) -> CreateRandomNodeResult
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         let function =
             Rc::clone(&settings.functions[random.gen_range(0..settings.functions.len())]);
@@ -217,7 +212,7 @@ impl Node {
         variables: &[String],
     ) -> CreateRandomNodeResult
     where
-        R: Random,
+        R: Random + ?Sized,
     {
         if random.gen_float_standard() < 0.5 {
             CreateRandomNodeResult {
@@ -271,10 +266,7 @@ impl Random for MockRandom {
             None => unreachable!(),
         }
     }
-    fn gen_range<R>(&mut self, _: R) -> usize
-    where
-        R: SampleRange<usize>,
-    {
+    fn gen_range(&mut self, _: Range<usize>) -> usize {
         match &mut self.int {
             Some(int) => int.next().unwrap(),
             None => unreachable!(),

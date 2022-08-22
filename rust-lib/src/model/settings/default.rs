@@ -1,5 +1,9 @@
 //! Module for getting default settings.
-use super::settings::{NodeProbability, Settings};
+use super::super::mutations::{
+    remove_operation_mutation, replace_leaf_mutation, replace_operation_mutation,
+    replace_subtree_mutation,
+};
+use super::settings::{Mutation, NodeProbability, Settings};
 use super::types::{Converter, ConverterOperation};
 use crate::expression_tree::{Associativity, Function, Node, Operator, ValueNode};
 use std::f64::{consts::E, consts::PI, NAN};
@@ -21,6 +25,32 @@ impl Default for Settings {
                     value_node: 1.0 - operation_node_probability * 2.0,
                 }
             },
+            mutations: vec![
+                Mutation {
+                    mutation_fn: Box::new(|expression_tree, random, settings| {
+                        replace_subtree_mutation(expression_tree, random, settings)
+                    }),
+                    probability: 0.2,
+                },
+                Mutation {
+                    mutation_fn: Box::new(|expression_tree, random, settings| {
+                        replace_leaf_mutation(expression_tree, random, settings)
+                    }),
+                    probability: 0.3,
+                },
+                Mutation {
+                    mutation_fn: Box::new(|expression_tree, random, settings| {
+                        replace_operation_mutation(expression_tree, random, settings)
+                    }),
+                    probability: 0.3,
+                },
+                Mutation {
+                    mutation_fn: Box::new(|expression_tree, random, settings| {
+                        remove_operation_mutation(expression_tree, random, settings)
+                    }),
+                    probability: 0.2,
+                },
+            ],
         };
         settings.converters = settings.get_default_converters();
         settings

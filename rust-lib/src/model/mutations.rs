@@ -9,7 +9,7 @@ pub fn replace_subtree_mutation<R>(
     random: &mut R,
     settings: &Settings,
 ) where
-    R: Random,
+    R: Random + ?Sized,
 {
     let variables = expression_tree.variables.clone();
     let tree_complexity = expression_tree.get_complexity(settings);
@@ -27,7 +27,7 @@ pub fn replace_leaf_mutation<R>(
     random: &mut R,
     settings: &Settings,
 ) where
-    R: Random,
+    R: Random + ?Sized,
 {
     *expression_tree.get_random_value_node_mut(random) =
         Node::create_random_value(random, settings, &expression_tree.variables).node;
@@ -38,7 +38,7 @@ pub fn replace_operation_mutation<R>(
     random: &mut R,
     settings: &Settings,
 ) where
-    R: Random,
+    R: Random + ?Sized,
 {
     let variables = expression_tree.variables.clone();
     let tree_complexity = expression_tree.get_complexity(settings);
@@ -94,7 +94,7 @@ pub fn remove_operation_mutation<R>(
     random: &mut R,
     _: &Settings,
 ) where
-    R: Random,
+    R: Random + ?Sized,
 {
     let node = expression_tree.get_random_operation_node_mut(random);
     let mut arguments = match node {
@@ -113,7 +113,7 @@ fn prepare_arguments<R>(
     arguments_number: usize,
     complexity: u32,
 ) where
-    R: Random,
+    R: Random + ?Sized,
 {
     while arguments.len() < arguments_number {
         arguments.push(Node::create_random(random, settings, &variables, complexity).node)
