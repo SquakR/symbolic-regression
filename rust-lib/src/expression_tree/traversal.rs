@@ -97,7 +97,7 @@ impl Node {
     /// Pre-order traversal algorithm.
     pub fn walk_pre_order<'a, C>(&'a self, callback: &mut C)
     where
-        C: FnMut(&'a Self) -> (),
+        C: FnMut(&'a Node) -> (),
     {
         callback(self);
         if let Node::Operator(operator_node) = self {
@@ -114,7 +114,7 @@ impl Node {
     /// Return a reference to the node that satisfies the predicate, or None if no such node exists.
     pub fn get_node<C>(&self, predicate: &mut C) -> Option<&Node>
     where
-        C: FnMut(&Self) -> bool,
+        C: FnMut(&Node) -> bool,
     {
         if predicate(self) {
             return Some(self);
@@ -142,7 +142,7 @@ impl Node {
     /// Return a mutable reference to the node that satisfies the predicate, or None if no such node exists.
     pub fn get_node_mut<C>(&mut self, predicate: &mut C) -> Option<&mut Node>
     where
-        C: FnMut(&Self) -> bool,
+        C: FnMut(&Node) -> bool,
     {
         if predicate(self) {
             return Some(self);

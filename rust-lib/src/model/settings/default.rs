@@ -5,8 +5,8 @@ use crate::expression_tree::{Associativity, Function, Node, Operator, ValueNode}
 use std::f64::{consts::E, consts::PI, NAN};
 use std::rc::Rc;
 
-impl Settings {
-    pub fn default() -> Settings {
+impl Default for Settings {
+    fn default() -> Settings {
         let mut settings = Settings {
             operators: Settings::get_default_operators(),
             functions: Settings::get_default_functions(),
@@ -25,6 +25,9 @@ impl Settings {
         settings.converters = settings.get_default_converters();
         settings
     }
+}
+
+impl Settings {
     pub fn get_default_operators() -> Vec<Rc<Operator>> {
         vec![
             Rc::new(Operator {
