@@ -16,12 +16,14 @@ pub struct Mutation {
 }
 
 impl Mutation {
-    pub fn mutate<R: Random>(
+    pub fn mutate<R>(
         &self,
         expression_tree: &mut ExpressionTree,
         random: &mut R,
         settings: &Settings,
-    ) {
+    ) where
+        R: Random,
+    {
         (self.mutation_fn)(expression_tree, random, settings);
     }
 }
@@ -88,12 +90,26 @@ impl Settings {
             arguments,
         }
     }
+    pub fn mutate<R>(&self, expression_tree: &mut ExpressionTree, random: &mut R)
+    where
+        R: Random,
+    {
+        let random_probability = random.gen_float_standard();
+        let mut probability = 0.0;
+        for mutation in &self.mutations {
+            probability += mutation.probability;
+            if random_probability < probability {
+                mutation.mutate(expression_tree, random, self);
+                break;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expression_tree::ValueNode;
+    use crate::expression_tree::{MockRandom, ValueNode};
     use std::f64::consts::E;
 
     #[test]
@@ -199,5 +215,35 @@ mod tests {
             vec![Node::Value(ValueNode::Constant(2.0))],
         );
         assert_eq!(expected_output_data, actual_output_data);
+    }
+
+    #[test]
+    #[should_panic(expected = "Mutation number 2.")]
+    fn test_mutate() {
+        let mut settings = Settings::default();
+        let mut expression_tree = ExpressionTree {
+            root: Node::Value(ValueNode::Constant(5.0)),
+            variables: vec![],
+        };
+        let expression_tree_clone = expression_tree.clone();
+        let mut random = MockRandom::new(vec![], vec![], vec![0.45]);
+        settings.mutations = vec![
+            Mutation {
+                mutation_fn: Box::new(|_, _, _| panic!("Mutation number 1.")),
+                probability: 0.2,
+            },
+            Mutation {
+                mutation_fn: Box::new(move |actual_expression_tree, _, _| {
+                    assert_eq!(expression_tree_clone, *actual_expression_tree);
+                    panic!("Mutation number 2.");
+                }),
+                probability: 0.3,
+            },
+            Mutation {
+                mutation_fn: Box::new(|_, _, _| panic!("Mutation number 3.")),
+                probability: 0.3,
+            },
+        ];
+        settings.mutate(&mut expression_tree, &mut random);
     }
 }
