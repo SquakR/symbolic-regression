@@ -12,7 +12,7 @@ pub trait Random {
     fn gen_range(&mut self, range: Range<usize>) -> usize;
 }
 
-pub struct DefaultRandom<G: Rng>(G);
+pub struct DefaultRandom<G: Rng>(pub G);
 
 impl<G: Rng> Random for DefaultRandom<G> {
     fn gen_float(&mut self) -> f64 {
