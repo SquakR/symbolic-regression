@@ -47,9 +47,9 @@ impl<R: Random, C: Fn(&[Rc<Individual>])> Model<R, C> {
         (self.callback)(&current_generation);
         let mut error = current_generation[0].fitness.error;
         let mut stop_reason = self.stop_criterion.must_stop(
-            generation_number,
-            without_improvement_generation_number,
             error,
+            without_improvement_generation_number,
+            generation_number,
         );
         while let None = stop_reason {
             generation_number += 1;
@@ -64,9 +64,9 @@ impl<R: Random, C: Fn(&[Rc<Individual>])> Model<R, C> {
             (self.callback)(&current_generation);
             error = current_generation[0].fitness.error;
             stop_reason = self.stop_criterion.must_stop(
-                generation_number,
-                without_improvement_generation_number,
                 error,
+                without_improvement_generation_number,
+                generation_number,
             );
         }
         Ok(ModelResult {
@@ -233,10 +233,11 @@ impl<R: Random, C: Fn(&[Rc<Individual>])> Model<R, C> {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum StopReason {
-    GenerationNumber(u32),
-    WithoutImprovementGenerationNumber(u32),
     Error(f64),
+    WithoutImprovementGenerationNumber(u32),
+    GenerationNumber(u32),
 }
 
 pub struct ModelResult {
@@ -252,17 +253,18 @@ pub struct Individual {
     pub defective: bool,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct StopCriterion {
-    pub generation_number: Option<u32>,
-    pub without_improvement_generation_number: Option<u32>,
     pub error: Option<f64>,
+    pub without_improvement_generation_number: Option<u32>,
+    pub generation_number: Option<u32>,
 }
 
 impl StopCriterion {
     pub fn new(
-        generation_number: Option<u32>,
-        without_improvement_generation_number: Option<u32>,
         error: Option<f64>,
+        without_improvement_generation_number: Option<u32>,
+        generation_number: Option<u32>,
     ) -> StopCriterion {
         assert!(
             generation_number.is_some()
@@ -278,13 +280,13 @@ impl StopCriterion {
     }
     pub fn must_stop(
         &self,
-        generation_number: u32,
-        without_improvement_generation_number: u32,
         error: f64,
+        without_improvement_generation_number: u32,
+        generation_number: u32,
     ) -> Option<StopReason> {
-        if let Some(number) = self.generation_number {
-            if generation_number >= number {
-                return Some(StopReason::GenerationNumber(generation_number));
+        if let Some(err) = self.error {
+            if error < err {
+                return Some(StopReason::Error(error));
             }
         }
         if let Some(number) = self.without_improvement_generation_number {
@@ -294,9 +296,9 @@ impl StopCriterion {
                 ));
             }
         }
-        if let Some(err) = self.error {
-            if error < err {
-                return Some(StopReason::Error(error));
+        if let Some(number) = self.generation_number {
+            if generation_number >= number {
+                return Some(StopReason::GenerationNumber(generation_number));
             }
         }
         return None;
@@ -313,5 +315,79 @@ impl Iterator for IdGenerator {
         let id = self.id;
         self.id += 1;
         Some(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_id_generator() {
+        let mut id_generator = IdGenerator { id: 0 };
+        assert_eq!(Some(0), id_generator.next());
+        assert_eq!(Some(1), id_generator.next());
+    }
+
+    #[test]
+    #[should_panic(expected = "At least one stop criterion must be set.")]
+    fn test_stop_criterion_new_error() {
+        StopCriterion::new(None, None, None);
+    }
+
+    #[test]
+    fn test_stop_criterion_new() {
+        let expected_stop_criterion = StopCriterion {
+            generation_number: Some(100),
+            without_improvement_generation_number: Some(3),
+            error: Some(0.001),
+        };
+        let actual_stop_criterion = create_stop_criterion();
+        assert_eq!(expected_stop_criterion, actual_stop_criterion);
+    }
+
+    #[test]
+    fn test_stop_criterion_none() {
+        let stop_criterion = create_stop_criterion();
+        let expected_stop_reason = None;
+        assert_eq!(expected_stop_reason, stop_criterion.must_stop(0.01, 2, 99));
+    }
+
+    #[test]
+    fn test_stop_criterion_error() {
+        let stop_criterion = create_stop_criterion();
+        let expected_stop_reason = Some(StopReason::Error(0.0005));
+        assert_eq!(
+            expected_stop_reason,
+            stop_criterion.must_stop(0.0005, 2, 99)
+        );
+    }
+
+    #[test]
+    fn test_stop_criterion_without_improvement_generation_number() {
+        let stop_criterion = create_stop_criterion();
+        let expected_stop_reason = Some(StopReason::WithoutImprovementGenerationNumber(3));
+        assert_eq!(expected_stop_reason, stop_criterion.must_stop(0.01, 3, 99))
+    }
+
+    #[test]
+    fn test_stop_criterion_generation_number() {
+        let stop_criterion = create_stop_criterion();
+        let expected_stop_reason = Some(StopReason::GenerationNumber(100));
+        assert_eq!(expected_stop_reason, stop_criterion.must_stop(0.01, 2, 100));
+    }
+
+    #[test]
+    fn test_stop_criterion_all() {
+        let stop_criterion = create_stop_criterion();
+        let expected_stop_reason = Some(StopReason::Error(0.0005));
+        assert_eq!(
+            expected_stop_reason,
+            stop_criterion.must_stop(0.0005, 3, 100)
+        )
+    }
+
+    fn create_stop_criterion() -> StopCriterion {
+        StopCriterion::new(Some(0.001), Some(3), Some(100))
     }
 }
