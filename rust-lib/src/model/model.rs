@@ -9,31 +9,37 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub struct Model<R: Random, C: Fn(&[Rc<Individual>])> {
+pub struct Model<R: Random> {
     pub settings: Settings,
     pub input_data: InputData,
     pub stop_criterion: StopCriterion,
     pub generation_len: u32,
+    pub adapted_percent: f32,
+    pub unadapted_percent: f32,
     pub auxiliary_expression_trees: Vec<ExpressionTree>,
-    pub callback: C,
+    pub callback: Option<Box<dyn Fn(&[Rc<Individual>])>>,
     pub random: R,
     pub id_generator: Box<dyn Iterator<Item = u32>>,
 }
 
-impl<R: Random, C: Fn(&[Rc<Individual>])> Model<R, C> {
+impl<R: Random> Model<R> {
     pub fn new(
         settings: Settings,
         input_data: InputData,
         stop_criterion: StopCriterion,
         generation_len: u32,
+        adapted_percent: f32,
+        unadapted_percent: f32,
         auxiliary_expression_trees: Vec<ExpressionTree>,
-        callback: C,
-    ) -> Model<DefaultRandom<ThreadRng>, C> {
+        callback: Option<Box<dyn Fn(&[Rc<Individual>])>>,
+    ) -> Model<DefaultRandom<ThreadRng>> {
         Model {
             settings,
             input_data,
             stop_criterion,
             generation_len,
+            adapted_percent,
+            unadapted_percent,
             auxiliary_expression_trees,
             callback,
             random: DefaultRandom(rand::thread_rng()),
@@ -44,7 +50,7 @@ impl<R: Random, C: Fn(&[Rc<Individual>])> Model<R, C> {
         let mut generation_number = 0;
         let mut without_improvement_generation_number = 0;
         let mut current_generation = self.create_first_generation()?;
-        (self.callback)(&current_generation);
+        self.execute_callback(&current_generation);
         let mut error = current_generation[0].fitness.error;
         let mut stop_reason = self.stop_criterion.must_stop(
             error,
@@ -61,7 +67,7 @@ impl<R: Random, C: Fn(&[Rc<Individual>])> Model<R, C> {
                 without_improvement_generation_number += 1;
             };
             current_generation = next_generation;
-            (self.callback)(&current_generation);
+            self.execute_callback(&current_generation);
             error = current_generation[0].fitness.error;
             stop_reason = self.stop_criterion.must_stop(
                 error,
@@ -192,11 +198,16 @@ impl<R: Random, C: Fn(&[Rc<Individual>])> Model<R, C> {
         }
         false
     }
+    fn execute_callback(&self, individuals: &[Rc<Individual>]) {
+        if let Some(callback) = &self.callback {
+            (callback)(individuals);
+        }
+    }
     fn get_adapted_number(&self) -> usize {
-        (0.2 * self.generation_len as f32) as usize
+        (self.adapted_percent * self.generation_len as f32) as usize
     }
     fn get_unadapted_number(&self) -> usize {
-        (0.1 * self.generation_len as f32) as usize
+        (self.unadapted_percent * self.generation_len as f32) as usize
     }
 }
 
@@ -292,7 +303,7 @@ pub struct Individual {
 }
 
 impl PartialEq for Individual {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, other: &Individual) -> bool {
         self.id == other.id
     }
 }
@@ -365,8 +376,10 @@ impl Iterator for IdGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expression_tree::{Node, ValueNode};
+    use crate::expression_tree::{MockRandom, Node, OperationNode, ValueNode};
+    use calamine::{DataType, Range, Reader, Xlsx};
     use std::f64::NAN;
+    use std::path::PathBuf;
 
     #[test]
     fn test_id_generator() {
@@ -481,6 +494,33 @@ mod tests {
             let individuals = create_test_individuals();
             assert_eq!(0.007, get_individuals_fitness(&individuals));
         }
+
+        #[test]
+        fn test_get_adapted_number() {
+            let model = create_model(10, None, None);
+            assert_eq!(2, model.get_adapted_number());
+        }
+
+        #[test]
+        fn test_get_unadapted_number() {
+            let model = create_model(10, None, None);
+            assert_eq!(1, model.get_unadapted_number());
+        }
+
+        #[test]
+        #[should_panic(expected = "Panic.")]
+        fn test_execute_callback() {
+            let individuals = create_test_individuals();
+            let model = create_model(
+                10,
+                None,
+                Some(Box::new(|actual_individuals| {
+                    assert_eq!(create_test_individuals(), actual_individuals);
+                    panic!("Panic.")
+                })),
+            );
+            model.execute_callback(&individuals);
+        }
     }
 
     fn create_stop_criterion() -> StopCriterion {
@@ -537,5 +577,44 @@ mod tests {
                 &mut id_generator,
             ),
         ]
+    }
+
+    fn create_model(
+        generation_len: u32,
+        random: Option<MockRandom>,
+        callback: Option<Box<dyn Fn(&[Rc<Individual>])>>,
+    ) -> Model<MockRandom> {
+        let settings = Settings::default();
+        let sin = settings.find_function_by_name("sin").unwrap();
+        Model {
+            settings,
+            input_data: InputData::from_worksheet_range(get_worksheet("resources/input_data.xlsx"))
+                .unwrap(),
+            stop_criterion: create_stop_criterion(),
+            generation_len,
+            adapted_percent: 0.2,
+            unadapted_percent: 0.1,
+            auxiliary_expression_trees: vec![ExpressionTree {
+                root: Node::Function(OperationNode {
+                    operation: sin,
+                    arguments: vec![Node::Value(ValueNode::Constant(5.0))],
+                }),
+                variables: vec![String::from("x")],
+            }],
+            callback,
+            random: if let Some(random) = random {
+                random
+            } else {
+                MockRandom::new_int(vec![])
+            },
+            id_generator: Box::new(IdGenerator { id: 0 }),
+        }
+    }
+
+    fn get_worksheet(path: &str) -> Range<DataType> {
+        let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path_buf.push(path);
+        let mut workbook: Xlsx<_> = calamine::open_workbook(path_buf).unwrap();
+        workbook.worksheet_range("Sheet1").unwrap().unwrap()
     }
 }
