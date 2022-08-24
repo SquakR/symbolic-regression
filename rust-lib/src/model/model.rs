@@ -187,16 +187,24 @@ impl<R: Random> Model<R> {
         previous_generation: &[Rc<Individual>],
         next_generation: &[Rc<Individual>],
     ) -> bool {
-        if get_individuals_fitness(next_generation) < get_individuals_fitness(previous_generation) {
-            return true;
+        if let Some(without_improvement) = &self.stop_criterion.without_improvement {
+            if get_individuals_fitness(previous_generation)
+                - get_individuals_fitness(next_generation)
+                > without_improvement.error
+            {
+                return true;
+            }
+            let adapted_number = self.get_adapted_number();
+            if get_individuals_fitness(&previous_generation[0..adapted_number])
+                - get_individuals_fitness(&next_generation[0..adapted_number])
+                > without_improvement.error
+            {
+                return true;
+            }
+            false
+        } else {
+            true
         }
-        let adapted_number = self.get_adapted_number();
-        if get_individuals_fitness(&next_generation[0..adapted_number])
-            < get_individuals_fitness(&previous_generation[0..adapted_number])
-        {
-            return true;
-        }
-        false
     }
     fn execute_callback(&self, individuals: &[Rc<Individual>]) {
         if let Some(callback) = &self.callback {
@@ -284,7 +292,7 @@ fn add_individual_points<F>(
 #[derive(Debug, PartialEq)]
 pub enum StopReason {
     Error(f64),
-    WithoutImprovementGenerationNumber(u32),
+    WithoutImprovement(WithoutImprovement),
     GenerationNumber(u32),
 }
 
@@ -309,27 +317,31 @@ impl PartialEq for Individual {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct WithoutImprovement {
+    error: f64,
+    generation_number: u32,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct StopCriterion {
     pub error: Option<f64>,
-    pub without_improvement_generation_number: Option<u32>,
+    pub without_improvement: Option<WithoutImprovement>,
     pub generation_number: Option<u32>,
 }
 
 impl StopCriterion {
     pub fn new(
         error: Option<f64>,
-        without_improvement_generation_number: Option<u32>,
+        without_improvement: Option<WithoutImprovement>,
         generation_number: Option<u32>,
     ) -> StopCriterion {
         assert!(
-            generation_number.is_some()
-                || without_improvement_generation_number.is_some()
-                || error.is_some(),
+            generation_number.is_some() || without_improvement.is_some() || error.is_some(),
             "At least one stop criterion must be set."
         );
         StopCriterion {
             generation_number,
-            without_improvement_generation_number,
+            without_improvement,
             error,
         }
     }
@@ -344,11 +356,12 @@ impl StopCriterion {
                 return Some(StopReason::Error(error));
             }
         }
-        if let Some(number) = self.without_improvement_generation_number {
-            if without_improvement_generation_number >= number {
-                return Some(StopReason::WithoutImprovementGenerationNumber(
-                    without_improvement_generation_number,
-                ));
+        if let Some(without_improvement) = &self.without_improvement {
+            if without_improvement_generation_number >= without_improvement.generation_number {
+                return Some(StopReason::WithoutImprovement(WithoutImprovement {
+                    error,
+                    generation_number: without_improvement_generation_number,
+                }));
             }
         }
         if let Some(number) = self.generation_number {
@@ -401,7 +414,10 @@ mod tests {
         fn test_new() {
             let expected_stop_criterion = StopCriterion {
                 generation_number: Some(100),
-                without_improvement_generation_number: Some(3),
+                without_improvement: Some(WithoutImprovement {
+                    error: 0.001,
+                    generation_number: 3,
+                }),
                 error: Some(0.001),
             };
             let actual_stop_criterion = create_stop_criterion();
@@ -426,9 +442,12 @@ mod tests {
         }
 
         #[test]
-        fn test_must_stop_without_improvement_generation_number() {
+        fn test_must_stop_without_improvement() {
             let stop_criterion = create_stop_criterion();
-            let expected_stop_reason = Some(StopReason::WithoutImprovementGenerationNumber(3));
+            let expected_stop_reason = Some(StopReason::WithoutImprovement(WithoutImprovement {
+                error: 0.01,
+                generation_number: 3,
+            }));
             assert_eq!(expected_stop_reason, stop_criterion.must_stop(0.01, 3, 99))
         }
 
@@ -521,28 +540,34 @@ mod tests {
             );
             model.execute_callback(&individuals);
         }
-    }
 
-    fn create_stop_criterion() -> StopCriterion {
-        StopCriterion::new(Some(0.001), Some(3), Some(100))
-    }
-
-    fn create_stub_expression_tree() -> ExpressionTree {
-        ExpressionTree {
-            root: Node::Value(ValueNode::Constant(1.0)),
-            variables: vec![],
+        #[test]
+        fn test_is_next_generation_better() {
+            let model = create_model(10, None, None);
+            let previous_generation = create_test_individuals();
+            let mut next_generation = create_test_individuals();
+            assert!(!model.is_next_generation_better(&previous_generation, &next_generation));
+            let mut id_generator = IdGenerator { id: 1 };
+            next_generation[1] = create_individual(
+                Fitness {
+                    error: 0.006,
+                    complexity: 3,
+                },
+                &mut id_generator,
+            );
+            assert!(model.is_next_generation_better(&previous_generation, &next_generation));
         }
     }
 
-    fn create_individual(fitness: Fitness, id_generator: &mut IdGenerator) -> Rc<Individual> {
-        let defective = fitness.error.is_nan();
-        Rc::new(Individual {
-            id: id_generator.next().unwrap(),
-            generation_number: 0,
-            expression_tree: create_stub_expression_tree(),
-            fitness,
-            defective,
-        })
+    fn create_stop_criterion() -> StopCriterion {
+        StopCriterion::new(
+            Some(0.001),
+            Some(WithoutImprovement {
+                error: 0.001,
+                generation_number: 3,
+            }),
+            Some(100),
+        )
     }
 
     fn create_test_individuals() -> Vec<Rc<Individual>> {
@@ -616,5 +641,23 @@ mod tests {
         path_buf.push(path);
         let mut workbook: Xlsx<_> = calamine::open_workbook(path_buf).unwrap();
         workbook.worksheet_range("Sheet1").unwrap().unwrap()
+    }
+
+    fn create_individual(fitness: Fitness, id_generator: &mut IdGenerator) -> Rc<Individual> {
+        let defective = fitness.error.is_nan();
+        Rc::new(Individual {
+            id: id_generator.next().unwrap(),
+            generation_number: 0,
+            expression_tree: create_stub_expression_tree(),
+            fitness,
+            defective,
+        })
+    }
+
+    fn create_stub_expression_tree() -> ExpressionTree {
+        ExpressionTree {
+            root: Node::Value(ValueNode::Constant(1.0)),
+            variables: vec![],
+        }
     }
 }
