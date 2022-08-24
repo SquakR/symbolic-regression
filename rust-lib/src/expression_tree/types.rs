@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::rc::Rc;
 
-#[derive(Debug, PartialEq, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ExpressionTree {
     pub root: Node,
     pub variables: Vec<String>,
