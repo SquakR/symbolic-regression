@@ -1,8 +1,8 @@
 //! Module with model settings.
+pub mod core;
 pub mod default;
-pub mod settings;
 pub mod types;
 
+pub use self::core::*;
 pub use default::*;
-pub use settings::*;
 pub use types::*;

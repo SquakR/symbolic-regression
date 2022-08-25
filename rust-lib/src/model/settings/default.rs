@@ -3,7 +3,7 @@ use super::super::mutations::{
     remove_operation_mutation, replace_leaf_mutation, replace_operation_mutation,
     replace_subtree_mutation,
 };
-use super::settings::{Mutation, NodeProbability, Settings};
+use super::core::{Mutation, NodeProbability, Settings};
 use super::types::{Converter, ConverterOperation};
 use crate::expression_tree::{Associativity, Function, Node, Operator, ValueNode};
 use std::f64::{consts::E, consts::PI, NAN};

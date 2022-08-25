@@ -71,7 +71,7 @@ impl ConvertOutputData {
 
 #[cfg(test)]
 mod tests {
-    use super::super::settings::Settings;
+    use super::super::core::Settings;
     use super::*;
 
     mod converter_tests {
