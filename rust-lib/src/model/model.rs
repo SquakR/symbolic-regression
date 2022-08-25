@@ -557,6 +557,76 @@ mod tests {
             );
             assert!(model.is_next_generation_better(&previous_generation, &next_generation));
         }
+
+        #[test]
+        fn test_create_individuals() -> Result<(), FitnessError> {
+            let settings = Settings::default();
+            let mut model = create_model(10, None, None);
+            let mut expression_trees = create_auxiliary_expression_trees(&settings);
+            expression_trees.push(create_defective_expression_tree(&settings));
+            let mut expected_individuals = vec![];
+            for (i, t) in [
+                (
+                    Fitness {
+                        error: 36.34733200046427,
+                        complexity: 5,
+                    },
+                    false,
+                ),
+                (
+                    Fitness {
+                        error: 5586.5071943121839,
+                        complexity: 1,
+                    },
+                    false,
+                ),
+                (
+                    Fitness {
+                        error: NAN,
+                        complexity: 4,
+                    },
+                    true,
+                ),
+            ]
+            .iter()
+            .enumerate()
+            {
+                expected_individuals.push(Rc::new(Individual {
+                    id: i as u32,
+                    generation_number: 0,
+                    expression_tree: expression_trees[i].clone(),
+                    fitness: t.0.clone(),
+                    defective: t.1,
+                }));
+            }
+            let actual_individuals = model.create_individuals(expression_trees, 0)?;
+            for i in 0..3 {
+                assert_eq!(expected_individuals[i].id, actual_individuals[i].id);
+                assert_eq!(
+                    expected_individuals[i].generation_number,
+                    actual_individuals[i].generation_number
+                );
+                assert_eq!(
+                    expected_individuals[i].expression_tree,
+                    actual_individuals[i].expression_tree
+                );
+                assert_eq!(
+                    expected_individuals[i].fitness.complexity,
+                    actual_individuals[i].fitness.complexity
+                );
+                assert!([None, Some(Ordering::Equal)].contains(
+                    &expected_individuals[i]
+                        .fitness
+                        .error
+                        .partial_cmp(&actual_individuals[i].fitness.error)
+                ));
+                assert_eq!(
+                    expected_individuals[i].defective,
+                    actual_individuals[i].defective
+                );
+            }
+            Ok(())
+        }
     }
 
     fn create_stop_criterion() -> StopCriterion {
@@ -610,22 +680,18 @@ mod tests {
         callback: Option<Box<dyn Fn(&[Rc<Individual>])>>,
     ) -> Model<MockRandom> {
         let settings = Settings::default();
-        let sin = settings.find_function_by_name("sin").unwrap();
+        let auxiliary_expression_trees = create_auxiliary_expression_trees(&settings);
         Model {
             settings,
-            input_data: InputData::from_worksheet_range(get_worksheet("resources/input_data.xlsx"))
-                .unwrap(),
+            input_data: InputData::from_worksheet_range(get_worksheet(
+                "resources/input_data_sin.xlsx",
+            ))
+            .unwrap(),
             stop_criterion: create_stop_criterion(),
             generation_len,
             adapted_percent: 0.2,
             unadapted_percent: 0.1,
-            auxiliary_expression_trees: vec![ExpressionTree {
-                root: Node::Function(OperationNode {
-                    operation: sin,
-                    arguments: vec![Node::Value(ValueNode::Constant(5.0))],
-                }),
-                variables: vec![String::from("x")],
-            }],
+            auxiliary_expression_trees,
             callback,
             random: if let Some(random) = random {
                 random
@@ -636,11 +702,40 @@ mod tests {
         }
     }
 
-    fn get_worksheet(path: &str) -> Range<DataType> {
-        let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path_buf.push(path);
-        let mut workbook: Xlsx<_> = calamine::open_workbook(path_buf).unwrap();
-        workbook.worksheet_range("Sheet1").unwrap().unwrap()
+    fn create_stub_expression_tree() -> ExpressionTree {
+        ExpressionTree {
+            root: Node::Value(ValueNode::Constant(1.0)),
+            variables: vec![],
+        }
+    }
+
+    fn create_defective_expression_tree(settings: &Settings) -> ExpressionTree {
+        ExpressionTree {
+            root: Node::Operator(OperationNode {
+                operation: settings.find_binary_operator_by_name("/").unwrap(),
+                arguments: vec![
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                    Node::Value(ValueNode::Constant(0.0)),
+                ],
+            }),
+            variables: vec![String::from("x")],
+        }
+    }
+
+    fn create_auxiliary_expression_trees(settings: &Settings) -> Vec<ExpressionTree> {
+        vec![
+            ExpressionTree {
+                root: Node::Function(OperationNode {
+                    operation: settings.find_function_by_name("sin").unwrap(),
+                    arguments: vec![Node::Value(ValueNode::Constant(5.0))],
+                }),
+                variables: vec![String::from("x")],
+            },
+            ExpressionTree {
+                root: Node::Value(ValueNode::Variable(String::from("x"))),
+                variables: vec![String::from("x")],
+            },
+        ]
     }
 
     fn create_individual(fitness: Fitness, id_generator: &mut IdGenerator) -> Rc<Individual> {
@@ -654,10 +749,10 @@ mod tests {
         })
     }
 
-    fn create_stub_expression_tree() -> ExpressionTree {
-        ExpressionTree {
-            root: Node::Value(ValueNode::Constant(1.0)),
-            variables: vec![],
-        }
+    fn get_worksheet(path: &str) -> Range<DataType> {
+        let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path_buf.push(path);
+        let mut workbook: Xlsx<_> = calamine::open_workbook(path_buf).unwrap();
+        workbook.worksheet_range("Sheet1").unwrap().unwrap()
     }
 }
