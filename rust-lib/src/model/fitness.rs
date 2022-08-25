@@ -239,7 +239,7 @@ mod tests {
     }
 
     fn create_input_data_to_get_fitness() -> InputData {
-        InputData::new(
+        InputData::build(
             vec![String::from("x1"), String::from("x2"), String::from("y")],
             vec![
                 vec![1.0, 2.0, 3.0],

@@ -36,13 +36,13 @@ impl Default for Settings {
                     mutation_fn: Box::new(|expression_tree, random, settings| {
                         replace_leaf_mutation(expression_tree, random, settings)
                     }),
-                    probability: 0.3,
+                    probability: 0.25,
                 },
                 Mutation {
                     mutation_fn: Box::new(|expression_tree, random, settings| {
                         replace_operation_mutation(expression_tree, random, settings)
                     }),
-                    probability: 0.3,
+                    probability: 0.25,
                 },
                 Mutation {
                     mutation_fn: Box::new(|expression_tree, random, settings| {

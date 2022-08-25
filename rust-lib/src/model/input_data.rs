@@ -14,7 +14,7 @@ pub struct InputData {
 
 impl InputData {
     /// Returns new InputData with constraint checks.
-    pub fn new(variables: Vec<String>, rows: Vec<Vec<f64>>) -> Result<InputData, InputDataError> {
+    pub fn build(variables: Vec<String>, rows: Vec<Vec<f64>>) -> Result<InputData, InputDataError> {
         if variables.len() < 2 {
             return Err(InputDataError {
                 message: String::from(
@@ -51,7 +51,7 @@ impl InputData {
     /// Crete new InputData from json string.
     pub fn from_json(json: &str) -> Result<InputData, FromJsonError> {
         if let Ok(input_data) = serde_json::from_str::<InputData>(json) {
-            match InputData::new(input_data.variables, input_data.rows) {
+            match InputData::build(input_data.variables, input_data.rows) {
                 Ok(input_data) => return Ok(input_data),
                 Err(err) => return Err(FromJsonError::InputDataError(err)),
             }
@@ -75,7 +75,7 @@ impl InputData {
                         }));
                     }
                 }
-                match InputData::new(
+                match InputData::build(
                     input_data.keys().cloned().collect::<Vec<String>>(),
                     transpose(input_data.into_values().collect()),
                 ) {
@@ -143,7 +143,7 @@ impl InputData {
             }
             rows.push(row)
         }
-        InputData::new(variables, rows)
+        InputData::build(variables, rows)
     }
 }
 
@@ -190,8 +190,8 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_new_valid() -> Result<(), InputDataError> {
-        let actual_input_data = InputData::new(
+    fn test_build_valid() -> Result<(), InputDataError> {
+        let actual_input_data = InputData::build(
             vec![String::from("x1"), String::from("x2"), String::from("y")],
             vec![vec![1.0, 2.0, 3.0], vec![1.0, -1.0, 0.0]],
         )?;
@@ -204,13 +204,13 @@ mod tests {
     }
 
     #[test]
-    fn test_new_invalid_not_enough_variables() {
+    fn test_build_invalid_not_enough_variables() {
         let expected_error = InputDataError {
             message: String::from(
                 r#"The "InputData" struct must contain at least two variables, of which the last variable is output one."#,
             ),
         };
-        match InputData::new(vec![String::from("x")], vec![vec![1.0], vec![2.0]]) {
+        match InputData::build(vec![String::from("x")], vec![vec![1.0], vec![2.0]]) {
             Ok(input_data) => panic!(
                 "Expected {:?} error, but {:?} was received.",
                 expected_error, input_data
@@ -220,11 +220,11 @@ mod tests {
     }
 
     #[test]
-    fn test_new_invalid_duplicate_variable() {
+    fn test_build_invalid_duplicate_variable() {
         let expected_error = InputDataError {
             message: String::from(r#"The variable "x1" occurs 2 times."#),
         };
-        match InputData::new(
+        match InputData::build(
             vec![String::from("x1"), String::from("x2"), String::from("x1")],
             vec![
                 vec![1.0, 2.0, 3.0],
@@ -241,11 +241,11 @@ mod tests {
     }
 
     #[test]
-    fn test_new_wrong_row() {
+    fn test_build_wrong_row() {
         let expected_error = InputDataError {
             message: String::from("The row at index 1 contains 2 values, but must contain 3."),
         };
-        match InputData::new(
+        match InputData::build(
             vec![String::from("x1"), String::from("x2"), String::from("y")],
             vec![vec![1.0, 2.0, 3.0], vec![1.0, 0.0], vec![3.0, 3.0, 6.0]],
         ) {
