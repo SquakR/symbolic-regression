@@ -98,7 +98,7 @@ impl<R: Random> Model<R> {
                 generation.push(ExpressionTree::create_random(
                     &mut self.random,
                     &self.settings,
-                    &self.input_data.variables,
+                    &self.input_data.variables[0..self.input_data.variables.len() - 1],
                 ));
             }
             generation
@@ -285,15 +285,15 @@ mod tests {
         for (i, t) in [
             (
                 Fitness {
-                    error: 36.34733200046427,
-                    complexity: 5,
+                    error: 5586.5071943121839,
+                    complexity: 1,
                 },
                 false,
             ),
             (
                 Fitness {
-                    error: 5586.5071943121839,
-                    complexity: 1,
+                    error: 36.34733200046427,
+                    complexity: 5,
                 },
                 false,
             ),
@@ -349,7 +349,7 @@ mod tests {
     fn test_cross() {
         let settings = Settings::default();
         let mut model = create_model(10, 0, Some(create_auxiliary_individuals_random()), None);
-        let individuals = create_auxiliary_individuals(&settings, &model.input_data);
+        let individuals = create_auxiliary_individuals(&settings, &model.input_data, 0);
         let expected_expression_trees = create_auxiliary_individuals_descendants(&settings);
         let actual_expression_trees = model.cross(&individuals);
         assert_eq!(expected_expression_trees, actual_expression_trees);
@@ -359,10 +359,11 @@ mod tests {
     fn test_select_individuals_to_cross() {
         let settings = Settings::default();
         let mut model = create_model(10, 0, Some(MockRandom::new_int(vec![3])), None);
-        let mut individuals = create_auxiliary_individuals(&settings, &model.input_data);
+        let mut individuals = create_auxiliary_individuals(&settings, &model.input_data, 0);
         individuals.append(&mut create_auxiliary_individuals(
             &settings,
             &model.input_data,
+            2,
         ));
         let expected_individuals_to_cross = vec![
             individuals[0].clone(),
@@ -376,24 +377,73 @@ mod tests {
     #[test]
     fn test_create_next_generation() -> Result<(), FitnessError> {
         let settings = Settings::default();
-        let mut model = create_model(3, 3, Some(create_auxiliary_individuals_random()), None);
-        let current_generation = create_auxiliary_individuals(&settings, &model.input_data);
+        let mut model = create_model(10, 6, Some(create_auxiliary_individuals_random()), None);
+        let mut current_generation = vec![];
+        for i in 0..3 {
+            current_generation.append(&mut create_auxiliary_individuals(
+                &settings,
+                &model.input_data,
+                i * 2,
+            ));
+        }
         let auxiliary_individuals_descendants = create_auxiliary_individuals_descendants(&settings);
-        let expected_next_generation = vec![
-            Rc::new(Individual {
-                id: 3,
-                generation_number: 1,
-                expression_tree: auxiliary_individuals_descendants[0].clone(),
-                fitness: auxiliary_individuals_descendants[0]
-                    .get_fitness(&settings, &model.input_data)
-                    .unwrap(),
-                defective: false,
-            }),
-            current_generation[0].clone(),
-            current_generation[1].clone(),
-        ];
         let actual_next_generation = model.create_next_generation(&current_generation, 1)?;
-        assert_eq!(expected_next_generation, actual_next_generation);
+        assert_eq!(10, actual_next_generation.len());
+        assert_eq!(
+            auxiliary_individuals_descendants[0],
+            actual_next_generation[0].expression_tree
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_initial_expression_trees_not_random() {
+        let settings = Settings::default();
+        let mut model = create_model(2, 0, None, None);
+        let expected_expression_trees = create_auxiliary_expression_trees(&settings);
+        let actual_expression_trees = model.create_initial_expression_trees();
+        assert_eq!(expected_expression_trees, actual_expression_trees);
+    }
+
+    #[test]
+    fn test_create_initial_expression_trees_random() {
+        let settings = Settings::default();
+        let mut model = create_model(
+            3,
+            2,
+            Some(MockRandom::new(
+                vec![0, 0],
+                vec![10.0],
+                vec![0.1, 0.9, 0.4, 0.9, 0.6],
+            )),
+            None,
+        );
+        let mut expected_expression_trees = create_auxiliary_expression_trees(&settings);
+        expected_expression_trees.push(ExpressionTree {
+            root: Node::Operator(OperationNode {
+                operation: settings.find_binary_operator_by_name("+").unwrap(),
+                arguments: vec![
+                    Node::Value(ValueNode::Variable(String::from("x"))),
+                    Node::Value(ValueNode::Constant(10.0)),
+                ],
+            }),
+            variables: vec![String::from("x")],
+        });
+        let actual_expression_trees = model.create_initial_expression_trees();
+        assert_eq!(expected_expression_trees, actual_expression_trees);
+    }
+
+    #[test]
+    fn test_create_first_generation() -> Result<(), FitnessError> {
+        let settings = Settings::default();
+        let mut model = create_model(2, 0, None, None);
+        let expected_first_generation =
+            create_auxiliary_individuals(&settings, &model.input_data, 0)
+                .into_iter()
+                .rev()
+                .collect::<Vec<Rc<Individual>>>();
+        let actual_first_generation = model.create_first_generation()?;
+        assert_eq!(expected_first_generation, actual_first_generation);
         Ok(())
     }
 
@@ -455,14 +505,14 @@ mod tests {
     fn create_auxiliary_expression_trees(settings: &Settings) -> Vec<ExpressionTree> {
         vec![
             ExpressionTree {
+                root: Node::Value(ValueNode::Variable(String::from("x"))),
+                variables: vec![String::from("x")],
+            },
+            ExpressionTree {
                 root: Node::Function(OperationNode {
                     operation: settings.find_function_by_name("sin").unwrap(),
                     arguments: vec![Node::Value(ValueNode::Constant(5.0))],
                 }),
-                variables: vec![String::from("x")],
-            },
-            ExpressionTree {
-                root: Node::Value(ValueNode::Variable(String::from("x"))),
                 variables: vec![String::from("x")],
             },
         ]
@@ -471,6 +521,7 @@ mod tests {
     fn create_auxiliary_individuals(
         settings: &Settings,
         input_data: &InputData,
+        id: u32,
     ) -> Vec<Rc<Individual>> {
         let expression_trees = create_auxiliary_expression_trees(settings);
         expression_trees
@@ -479,7 +530,7 @@ mod tests {
             .map(|(i, expression_tree)| {
                 let fitness = expression_tree.get_fitness(settings, input_data).unwrap();
                 Rc::new(Individual {
-                    id: i as u32,
+                    id: id + i as u32,
                     generation_number: 0,
                     expression_tree,
                     fitness,
@@ -507,7 +558,7 @@ mod tests {
 
     fn create_auxiliary_individuals_random() -> MockRandom {
         MockRandom::new(
-            vec![0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0],
+            vec![1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0],
             vec![],
             vec![0.95, 0.85],
         )
