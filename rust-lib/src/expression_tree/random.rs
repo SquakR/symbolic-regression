@@ -223,17 +223,29 @@ impl Node {
     {
         if random.gen_float_standard() < 0.5 {
             CreateRandomNodeResult {
-                node: Node::Value(ValueNode::Variable(
-                    variables[random.gen_range(0..variables.len())].to_owned(),
-                )),
+                node: Node::create_random_variable(random, variables),
                 complexity: settings.variable_complexity,
             }
         } else {
             CreateRandomNodeResult {
-                node: Node::Value(ValueNode::Constant(random.gen_float())),
+                node: Node::create_random_constant(random),
                 complexity: settings.constant_complexity,
             }
         }
+    }
+    pub fn create_random_variable<R>(random: &mut R, variables: &[String]) -> Node
+    where
+        R: Random + ?Sized,
+    {
+        Node::Value(ValueNode::Variable(
+            variables[random.gen_range(0..variables.len())].to_owned(),
+        ))
+    }
+    pub fn create_random_constant<R>(random: &mut R) -> Node
+    where
+        R: Random + ?Sized,
+    {
+        Node::Value(ValueNode::Constant(random.gen_float()))
     }
 }
 

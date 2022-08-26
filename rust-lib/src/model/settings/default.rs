@@ -1,7 +1,7 @@
 //! Module for getting default settings.
 use super::super::mutations::{
     remove_operation_mutation, replace_leaf_mutation, replace_operation_mutation,
-    replace_subtree_mutation,
+    replace_subtree_mutation, shift_leaf_mutation,
 };
 use super::core::{Mutation, NodeProbability, Settings};
 use super::types::{Converter, ConverterOperation};
@@ -30,19 +30,25 @@ impl Default for Settings {
                     mutation_fn: Box::new(|expression_tree, random, settings| {
                         replace_subtree_mutation(expression_tree, random, settings)
                     }),
-                    probability: 0.2,
+                    probability: 0.15,
                 },
                 Mutation {
                     mutation_fn: Box::new(|expression_tree, random, settings| {
                         replace_leaf_mutation(expression_tree, random, settings)
                     }),
-                    probability: 0.25,
+                    probability: 0.15,
+                },
+                Mutation {
+                    mutation_fn: Box::new(|expression_tree, random, settings| {
+                        shift_leaf_mutation(expression_tree, random, settings)
+                    }),
+                    probability: 0.2,
                 },
                 Mutation {
                     mutation_fn: Box::new(|expression_tree, random, settings| {
                         replace_operation_mutation(expression_tree, random, settings)
                     }),
-                    probability: 0.25,
+                    probability: 0.2,
                 },
                 Mutation {
                     mutation_fn: Box::new(|expression_tree, random, settings| {

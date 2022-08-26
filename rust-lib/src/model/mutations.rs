@@ -1,6 +1,6 @@
 //! Module with expression tree mutations.
 use super::settings::Settings;
-use crate::expression_tree::{ExpressionTree, Node, OperationNode, Random};
+use crate::expression_tree::{ExpressionTree, Node, OperationNode, Random, ValueNode};
 use std::cmp::max;
 use std::rc::Rc;
 
@@ -31,6 +31,25 @@ pub fn replace_leaf_mutation<R>(
 {
     *expression_tree.get_random_value_node_mut(random) =
         Node::create_random_value(random, settings, &expression_tree.variables).node;
+}
+
+pub fn shift_leaf_mutation<R>(expression_tree: &mut ExpressionTree, random: &mut R, _: &Settings)
+where
+    R: Random + ?Sized,
+{
+    let variables = expression_tree.variables.clone();
+    let random_value_node = expression_tree.get_random_value_node_mut(random);
+    match random_value_node {
+        Node::Value(ValueNode::Variable(_)) => {
+            *random_value_node = Node::create_random_variable(random, &variables);
+        }
+        Node::Value(ValueNode::Constant(constant)) => {
+            let constant =
+                *constant + (50 - random.gen_range(0..100)) as f64 * random.gen_float_standard();
+            *random_value_node = Node::Value(ValueNode::Constant(constant));
+        }
+        _ => unreachable!(),
+    }
 }
 
 pub fn replace_operation_mutation<R>(
@@ -163,6 +182,69 @@ mod tests {
                     operation: settings.find_function_by_name("log").unwrap(),
                     arguments: vec![
                         Node::Value(ValueNode::Variable(String::from("x"))),
+                        Node::Operator(OperationNode {
+                            operation: settings.find_binary_operator_by_name("+").unwrap(),
+                            arguments: vec![
+                                Node::Value(ValueNode::Variable(String::from("x"))),
+                                Node::Value(ValueNode::Constant(10.0)),
+                            ],
+                        }),
+                    ],
+                })],
+            }),
+            variables: vec![String::from("x")],
+        };
+        assert_eq!(expected_expression_tree, expression_tree);
+    }
+
+    #[test]
+    fn test_shift_leaf_mutation_variable() {
+        let settings = Settings::default();
+        let mut expression_tree = create_test_expression_tree(&settings);
+        expression_tree.variables = vec![String::from("x1"), String::from("x2")];
+        shift_leaf_mutation(
+            &mut expression_tree,
+            &mut MockRandom::new_int(vec![1, 1]),
+            &settings,
+        );
+        let expected_expression_tree = ExpressionTree {
+            root: Node::Function(OperationNode {
+                operation: settings.find_function_by_name("sin").unwrap(),
+                arguments: vec![Node::Function(OperationNode {
+                    operation: settings.find_function_by_name("log").unwrap(),
+                    arguments: vec![
+                        Node::Value(ValueNode::Constant(5.0)),
+                        Node::Operator(OperationNode {
+                            operation: settings.find_binary_operator_by_name("+").unwrap(),
+                            arguments: vec![
+                                Node::Value(ValueNode::Variable(String::from("x2"))),
+                                Node::Value(ValueNode::Constant(10.0)),
+                            ],
+                        }),
+                    ],
+                })],
+            }),
+            variables: vec![String::from("x1"), String::from("x2")],
+        };
+        assert_eq!(expected_expression_tree, expression_tree);
+    }
+
+    #[test]
+    fn test_shift_leaf_mutation_constant() {
+        let settings = Settings::default();
+        let mut expression_tree = create_test_expression_tree(&settings);
+        shift_leaf_mutation(
+            &mut expression_tree,
+            &mut MockRandom::new(vec![0, 25], vec![], vec![0.5]),
+            &settings,
+        );
+        let expected_expression_tree = ExpressionTree {
+            root: Node::Function(OperationNode {
+                operation: settings.find_function_by_name("sin").unwrap(),
+                arguments: vec![Node::Function(OperationNode {
+                    operation: settings.find_function_by_name("log").unwrap(),
+                    arguments: vec![
+                        Node::Value(ValueNode::Constant(17.5)),
                         Node::Operator(OperationNode {
                             operation: settings.find_binary_operator_by_name("+").unwrap(),
                             arguments: vec![
