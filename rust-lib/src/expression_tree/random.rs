@@ -1,6 +1,7 @@
 //! Module with random operations on the expression tree.
 use super::types::{ExpressionTree, Node, Operation, OperationNode, ValueNode};
 use crate::model::settings::Settings;
+use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::f64::{MAX as F64MAX, MIN as F64MIN};
 use std::ops::Range;
@@ -13,6 +14,12 @@ pub trait Random {
 }
 
 pub struct DefaultRandom<G: Rng>(pub G);
+
+impl Default for DefaultRandom<ThreadRng> {
+    fn default() -> DefaultRandom<ThreadRng> {
+        DefaultRandom(rand::thread_rng())
+    }
+}
 
 impl<G: Rng> Random for DefaultRandom<G> {
     fn gen_float(&mut self) -> f64 {
@@ -250,6 +257,12 @@ impl MockRandom {
             float: None,
             float_standard: None,
         }
+    }
+}
+
+impl Default for MockRandom {
+    fn default() -> MockRandom {
+        MockRandom::new_int(vec![])
     }
 }
 

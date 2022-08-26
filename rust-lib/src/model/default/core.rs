@@ -16,19 +16,19 @@ pub struct Model<R: Random> {
     pub stop_criterion: StopCriterion,
     pub generation_size: GenerationSize,
     pub auxiliary_expression_trees: Vec<ExpressionTree>,
-    pub callback: Option<Box<dyn Fn(&[Rc<Individual>])>>,
+    pub callback: Option<Box<dyn FnMut(&[Rc<Individual>])>>,
     pub random: R,
     pub id_generator: Box<dyn Iterator<Item = u32>>,
 }
 
-impl<R: Random> Model<R> {
+impl Model<DefaultRandom<ThreadRng>> {
     pub fn new(
         settings: Settings,
         input_data: InputData,
         stop_criterion: StopCriterion,
         generation_size: GenerationSize,
         auxiliary_expression_trees: Vec<ExpressionTree>,
-        callback: Option<Box<dyn Fn(&[Rc<Individual>])>>,
+        callback: Option<Box<dyn FnMut(&[Rc<Individual>])>>,
     ) -> Model<DefaultRandom<ThreadRng>> {
         Model {
             settings,
@@ -37,10 +37,13 @@ impl<R: Random> Model<R> {
             generation_size,
             auxiliary_expression_trees,
             callback,
-            random: DefaultRandom(rand::thread_rng()),
+            random: DefaultRandom::default(),
             id_generator: Box::new(IdGenerator { id: 0 }),
         }
     }
+}
+
+impl<R: Random> Model<R> {
     pub fn run(&mut self) -> Result<ModelResult, FitnessError> {
         let mut generation_number = 0;
         let mut without_improvement_generation_number = 0;
@@ -205,8 +208,8 @@ impl<R: Random> Model<R> {
             true
         }
     }
-    fn execute_callback(&self, individuals: &[Rc<Individual>]) {
-        if let Some(callback) = &self.callback {
+    fn execute_callback(&mut self, individuals: &[Rc<Individual>]) {
+        if let Some(callback) = &mut self.callback {
             (callback)(individuals);
         }
     }
@@ -238,6 +241,7 @@ mod tests {
     use super::*;
     use crate::expression_tree::{MockRandom, Node, OperationNode, ValueNode};
     use calamine::{DataType, Range, Reader, Xlsx};
+    use std::cell::RefCell;
     use std::cmp::Ordering;
     use std::f64::NAN;
     use std::path::PathBuf;
@@ -246,7 +250,7 @@ mod tests {
     #[should_panic(expected = "Panic.")]
     fn test_execute_callback() {
         let individuals = create_test_individuals();
-        let model = create_model(
+        let mut model = create_model::<MockRandom>(
             10,
             0,
             None,
@@ -260,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_is_next_generation_better() {
-        let model = create_model(10, 0, None, None);
+        let model = create_model::<MockRandom>(10, 0, None, None);
         let previous_generation = create_test_individuals();
         let mut next_generation = create_test_individuals();
         assert!(!model.is_next_generation_better(&previous_generation, &next_generation));
@@ -277,10 +281,9 @@ mod tests {
 
     #[test]
     fn test_create_individuals() -> Result<(), FitnessError> {
-        let settings = Settings::default();
-        let mut model = create_model(10, 0, None, None);
-        let mut expression_trees = create_auxiliary_expression_trees(&settings);
-        expression_trees.push(create_defective_expression_tree(&settings));
+        let mut model = create_model::<MockRandom>(10, 0, None, None);
+        let mut expression_trees = create_auxiliary_expression_trees(&model.settings);
+        expression_trees.push(create_defective_expression_tree(&model.settings));
         let mut expected_individuals = vec![];
         for (i, t) in [
             (
@@ -347,21 +350,19 @@ mod tests {
 
     #[test]
     fn test_cross() {
-        let settings = Settings::default();
         let mut model = create_model(10, 0, Some(create_auxiliary_individuals_random()), None);
-        let individuals = create_auxiliary_individuals(&settings, &model.input_data, 0);
-        let expected_expression_trees = create_auxiliary_individuals_descendants(&settings);
+        let individuals = create_auxiliary_individuals(&model.settings, &model.input_data, 0);
+        let expected_expression_trees = create_auxiliary_individuals_descendants(&model.settings);
         let actual_expression_trees = model.cross(&individuals);
         assert_eq!(expected_expression_trees, actual_expression_trees);
     }
 
     #[test]
     fn test_select_individuals_to_cross() {
-        let settings = Settings::default();
         let mut model = create_model(10, 0, Some(MockRandom::new_int(vec![3])), None);
-        let mut individuals = create_auxiliary_individuals(&settings, &model.input_data, 0);
+        let mut individuals = create_auxiliary_individuals(&model.settings, &model.input_data, 0);
         individuals.append(&mut create_auxiliary_individuals(
-            &settings,
+            &model.settings,
             &model.input_data,
             2,
         ));
@@ -376,17 +377,17 @@ mod tests {
 
     #[test]
     fn test_create_next_generation() -> Result<(), FitnessError> {
-        let settings = Settings::default();
         let mut model = create_model(10, 6, Some(create_auxiliary_individuals_random()), None);
         let mut current_generation = vec![];
         for i in 0..3 {
             current_generation.append(&mut create_auxiliary_individuals(
-                &settings,
+                &model.settings,
                 &model.input_data,
                 i * 2,
             ));
         }
-        let auxiliary_individuals_descendants = create_auxiliary_individuals_descendants(&settings);
+        let auxiliary_individuals_descendants =
+            create_auxiliary_individuals_descendants(&model.settings);
         let actual_next_generation = model.create_next_generation(&current_generation, 1)?;
         assert_eq!(10, actual_next_generation.len());
         assert_eq!(
@@ -398,16 +399,14 @@ mod tests {
 
     #[test]
     fn test_create_initial_expression_trees_not_random() {
-        let settings = Settings::default();
-        let mut model = create_model(2, 0, None, None);
-        let expected_expression_trees = create_auxiliary_expression_trees(&settings);
+        let mut model = create_model::<MockRandom>(2, 0, None, None);
+        let expected_expression_trees = create_auxiliary_expression_trees(&model.settings);
         let actual_expression_trees = model.create_initial_expression_trees();
         assert_eq!(expected_expression_trees, actual_expression_trees);
     }
 
     #[test]
     fn test_create_initial_expression_trees_random() {
-        let settings = Settings::default();
         let mut model = create_model(
             3,
             2,
@@ -418,10 +417,10 @@ mod tests {
             )),
             None,
         );
-        let mut expected_expression_trees = create_auxiliary_expression_trees(&settings);
+        let mut expected_expression_trees = create_auxiliary_expression_trees(&model.settings);
         expected_expression_trees.push(ExpressionTree {
             root: Node::Operator(OperationNode {
-                operation: settings.find_binary_operator_by_name("+").unwrap(),
+                operation: model.settings.find_binary_operator_by_name("+").unwrap(),
                 arguments: vec![
                     Node::Value(ValueNode::Variable(String::from("x"))),
                     Node::Value(ValueNode::Constant(10.0)),
@@ -435,10 +434,9 @@ mod tests {
 
     #[test]
     fn test_create_first_generation() -> Result<(), FitnessError> {
-        let settings = Settings::default();
-        let mut model = create_model(2, 0, None, None);
+        let mut model = create_model::<MockRandom>(2, 0, None, None);
         let expected_first_generation =
-            create_auxiliary_individuals(&settings, &model.input_data, 0)
+            create_auxiliary_individuals(&model.settings, &model.input_data, 0)
                 .into_iter()
                 .rev()
                 .collect::<Vec<Rc<Individual>>>();
@@ -447,12 +445,77 @@ mod tests {
         Ok(())
     }
 
-    fn create_model(
+    #[test]
+    fn test_run() -> Result<(), FitnessError> {
+        let call_count = Rc::new(RefCell::new(0));
+        let call_count_copy = Rc::clone(&call_count);
+        let mut model = create_model(
+            10,
+            6,
+            Some(MockRandom::new(
+                vec![2, 0, 2, 0, 1, 0, 2, 0, 1, 0, 0, 0, 2, 0, 1],
+                vec![],
+                vec![0.95, 0.85],
+            )),
+            Some(Box::new(move |individuals| {
+                assert_eq!(10, individuals.len());
+                *call_count_copy.borrow_mut() += 1;
+            })),
+        );
+        model.auxiliary_expression_trees = vec![];
+        for _ in 0..5 {
+            model
+                .auxiliary_expression_trees
+                .append(&mut create_auxiliary_expression_trees(&model.settings));
+        }
+        let expected_expression_tree =
+            &create_auxiliary_individuals_descendants(&model.settings)[0];
+        let result = model.run()?;
+        assert_eq!(2, *call_count.borrow());
+        assert_eq!(expected_expression_tree, &result.individual.expression_tree);
+        match result.stop_reason {
+            StopReason::Error(error) => assert!(error < 0.000001),
+            _ => panic!(
+                "Expected StopReason::Error, but {:?} was received.",
+                result.stop_reason
+            ),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_new() {
+        let settings = Settings::default();
+        let auxiliary_expression_trees = create_auxiliary_expression_trees(&settings);
+        let expected_model = create_model(10, 0, Some(DefaultRandom::default()), None);
+        let actual_model = Model::new(
+            settings,
+            InputData::from_worksheet_range(get_worksheet("resources/input_data_sin.xlsx"))
+                .unwrap(),
+            create_stop_criterion(),
+            GenerationSize {
+                generation_len: 10,
+                adapted_percent: 0.2,
+                unadapted_percent: 0.1,
+            },
+            auxiliary_expression_trees,
+            None,
+        );
+        assert_eq!(expected_model.input_data, actual_model.input_data);
+        assert_eq!(expected_model.stop_criterion, actual_model.stop_criterion);
+        assert_eq!(expected_model.generation_size, actual_model.generation_size);
+        assert_eq!(
+            expected_model.auxiliary_expression_trees,
+            actual_model.auxiliary_expression_trees
+        );
+    }
+
+    fn create_model<R: Random + Default>(
         generation_len: u32,
         id: u32,
-        random: Option<MockRandom>,
-        callback: Option<Box<dyn Fn(&[Rc<Individual>])>>,
-    ) -> Model<MockRandom> {
+        random: Option<R>,
+        callback: Option<Box<dyn FnMut(&[Rc<Individual>])>>,
+    ) -> Model<R> {
         let settings = Settings::default();
         let auxiliary_expression_trees = create_auxiliary_expression_trees(&settings);
         Model {
@@ -472,7 +535,7 @@ mod tests {
             random: if let Some(random) = random {
                 random
             } else {
-                MockRandom::new_int(vec![])
+                R::default()
             },
             id_generator: Box::new(IdGenerator { id }),
         }
