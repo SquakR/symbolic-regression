@@ -1,6 +1,7 @@
 //! Module with generation size.
+use serde::Deserialize;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct GenerationSize {
     pub generation_len: u32,
     pub adapted_percent: f32,

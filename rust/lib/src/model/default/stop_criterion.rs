@@ -1,4 +1,5 @@
 //! Module with model stop criterion.
+use serde::Deserialize;
 
 #[derive(Debug, PartialEq)]
 pub enum StopReason {
@@ -7,13 +8,13 @@ pub enum StopReason {
     GenerationNumber(u32),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct WithoutImprovement {
     pub error: f64,
     pub generation_number: u32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct StopCriterion {
     pub error: Option<f64>,
     pub without_improvement: Option<WithoutImprovement>,
