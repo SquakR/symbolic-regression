@@ -1,6 +1,7 @@
 //! Module for replacing variables with values.
 use super::types::{ExpressionTree, Node, OperationNode, ValueNode};
 use std::collections::HashMap;
+use std::fmt;
 use std::rc::Rc;
 
 impl ExpressionTree {
@@ -64,6 +65,12 @@ impl SubsError {
                 variable
             ),
         }
+    }
+}
+
+impl fmt::Display for SubsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
     }
 }
 

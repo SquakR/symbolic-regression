@@ -1,5 +1,6 @@
 //! Module for computing an expression tree.
 use super::types::{ExpressionTree, Node, Operation, OperationNode, ValueNode};
+use std::fmt;
 
 pub trait Computable {
     /// Compute a node by computing all child nodes and performing a node operation.
@@ -21,6 +22,12 @@ impl ComputeError {
         ComputeError {
             message: format!(r#"The "{}" variable is not a constant."#, variable),
         }
+    }
+}
+
+impl fmt::Display for ComputeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
     }
 }
 

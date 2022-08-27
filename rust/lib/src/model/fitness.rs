@@ -5,6 +5,7 @@ use crate::expression_tree::{
     Computable, ComputeError, ExpressionTree, Node, Operation, OperationNode, SubsError, ValueNode,
 };
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fitness {
@@ -59,6 +60,15 @@ impl ExpressionTree {
 pub enum FitnessError {
     ComputeError(ComputeError),
     SubsError(SubsError),
+}
+
+impl fmt::Display for FitnessError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FitnessError::ComputeError(err) => write!(f, "{}", err),
+            FitnessError::SubsError(err) => write!(f, "{}", err),
+        }
+    }
 }
 
 impl Node {
