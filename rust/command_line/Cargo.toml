@@ -1,10 +1,10 @@
 [package]
-name = "symbolic-regression"
+name = "symbolic-regression-cl"
 version = "0.1.0"
 authors = ["Artem Orlov <squakrazv@gmail.com>"]
 edition = "2021"
 description = """
-Library crate for solving the problem of symbolic regression.
+Command line crate for solving the problem of symbolic regression.
 """
 homepage = "https://github.com/SquakR/symbolic-regression"
 repository = "https://github.com/SquakR/symbolic-regression"
@@ -15,8 +15,4 @@ categories = ["algorithms", "science"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rand = "0.8.5"
-take_mut = "0.2.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-calamine = "0.18.0"
+symbolic-regression = { path = "../lib" }

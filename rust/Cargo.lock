@@ -232,6 +232,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "symbolic-regression-cl"
+version = "0.1.0"
+dependencies = [
+ "symbolic-regression",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
