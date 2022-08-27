@@ -44,8 +44,8 @@ where
             *random_value_node = Node::create_random_variable(random, &variables);
         }
         Node::Value(ValueNode::Constant(constant)) => {
-            let constant =
-                *constant + (50 - random.gen_range(0..100)) as f64 * random.gen_float_standard();
+            let constant = *constant
+                + (50 - random.gen_range(0..100) as i32) as f64 * random.gen_float_standard();
             *random_value_node = Node::Value(ValueNode::Constant(constant));
         }
         _ => unreachable!(),
@@ -62,7 +62,6 @@ pub fn replace_operation_mutation<R>(
     let variables = expression_tree.variables.clone();
     let tree_complexity = expression_tree.get_complexity(settings);
     let complexity_random = 10 - random.gen_range(0..21) as i32;
-    let mut complexity = max(tree_complexity as i32 + complexity_random, 0) as u32;
     let node = expression_tree.get_random_operation_node_mut(random);
     let (mut arguments, operation_complexity) = match node {
         Node::Operator(operator_node) => (
@@ -75,7 +74,10 @@ pub fn replace_operation_mutation<R>(
         ),
         _ => unreachable!(),
     };
-    complexity -= operation_complexity;
+    let complexity = max(
+        tree_complexity as i32 - operation_complexity as i32 + complexity_random,
+        0,
+    ) as u32;
     let index = random.gen_range(0..settings.operators.len() + settings.functions.len());
     *node = if index < settings.operators.len() {
         let operator = Rc::clone(&settings.operators[index]);
