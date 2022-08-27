@@ -3,7 +3,7 @@ use super::types::{ExpressionTree, Node, Operation, OperationNode, ValueNode};
 use crate::model::settings::Settings;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use std::f64::{MAX as F64MAX, MIN as F64MIN};
+use rand_distr::{Distribution, Normal};
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -13,23 +13,32 @@ pub trait Random {
     fn gen_range(&mut self, range: Range<usize>) -> usize;
 }
 
-pub struct DefaultRandom<G: Rng>(pub G);
+pub struct DefaultRandom<G: Rng, D: Distribution<f64>> {
+    rng: G,
+    float_distribution: D,
+}
 
-impl Default for DefaultRandom<ThreadRng> {
-    fn default() -> DefaultRandom<ThreadRng> {
-        DefaultRandom(rand::thread_rng())
+impl Default for DefaultRandom<ThreadRng, Normal<f64>> {
+    fn default() -> DefaultRandom<ThreadRng, Normal<f64>> {
+        DefaultRandom {
+            rng: rand::thread_rng(),
+            float_distribution: Normal::new(0.0, 100.0).unwrap(),
+        }
     }
 }
 
-impl<G: Rng> Random for DefaultRandom<G> {
+impl<G: Rng, D: Distribution<f64>> Random for DefaultRandom<G, D> {
     fn gen_float(&mut self) -> f64 {
-        self.0.gen_range(F64MIN..F64MAX)
+        self.float_distribution.sample(&mut self.rng)
     }
     fn gen_float_standard(&mut self) -> f64 {
-        self.0.gen()
+        self.rng.gen()
     }
     fn gen_range(&mut self, range: Range<usize>) -> usize {
-        self.0.gen_range(range)
+        if range.is_empty() {
+            return range.start;
+        }
+        self.rng.gen_range(range)
     }
 }
 

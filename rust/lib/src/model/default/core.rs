@@ -8,6 +8,7 @@ use super::stop_criterion::{StopCriterion, StopReason};
 use super::utils::{get_individuals_fitness, sort_individuals, IdGenerator};
 use crate::expression_tree::{Computable, DefaultRandom, ExpressionTree, Random};
 use rand::rngs::ThreadRng;
+use rand_distr::Normal;
 use std::rc::Rc;
 
 pub struct Model<R: Random> {
@@ -21,7 +22,7 @@ pub struct Model<R: Random> {
     pub id_generator: Box<dyn Iterator<Item = u32>>,
 }
 
-impl Model<DefaultRandom<ThreadRng>> {
+impl Model<DefaultRandom<ThreadRng, Normal<f64>>> {
     pub fn new(
         settings: Settings,
         input_data: InputData,
@@ -29,7 +30,7 @@ impl Model<DefaultRandom<ThreadRng>> {
         generation_size: GenerationSize,
         auxiliary_expression_trees: Vec<ExpressionTree>,
         callback: Option<Box<dyn FnMut(&[Rc<Individual>])>>,
-    ) -> Model<DefaultRandom<ThreadRng>> {
+    ) -> Model<DefaultRandom<ThreadRng, Normal<f64>>> {
         Model {
             settings,
             input_data,
