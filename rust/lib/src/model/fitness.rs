@@ -4,10 +4,11 @@ use super::settings::Settings;
 use crate::expression_tree::{
     Computable, ComputeError, ExpressionTree, Node, Operation, OperationNode, SubsError, ValueNode,
 };
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Fitness {
     /// The sum of squared differences between actual and computed values.
     pub error: f64,

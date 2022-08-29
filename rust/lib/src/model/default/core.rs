@@ -10,6 +10,7 @@ use crate::expression_tree::random::{DefaultRandom, Random};
 use crate::expression_tree::{Computable, ExpressionTree};
 use rand::rngs::ThreadRng;
 use rand_distr::Normal;
+use serde::Serialize;
 use std::rc::Rc;
 
 pub struct Model<R: Random> {
@@ -76,7 +77,7 @@ impl<R: Random> Model<R> {
             );
         }
         Ok(ModelResult {
-            individual: Rc::clone(&current_generation[0]),
+            individual: (*current_generation[0]).clone(),
             stop_reason: match stop_reason {
                 Some(stop_reason) => stop_reason,
                 None => unreachable!(),
@@ -218,11 +219,11 @@ impl<R: Random> Model<R> {
 }
 
 pub struct ModelResult {
-    pub individual: Rc<Individual>,
+    pub individual: Individual,
     pub stop_reason: StopReason,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Individual {
     pub id: u32,
     pub generation_number: u32,

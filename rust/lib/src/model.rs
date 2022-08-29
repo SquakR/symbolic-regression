@@ -7,7 +7,6 @@ pub mod mutations;
 pub mod settings;
 
 pub use crossing::*;
-pub use default::*;
 pub use fitness::*;
 pub use input_data::*;
 pub use mutations::*;
