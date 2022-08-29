@@ -6,7 +6,8 @@ use super::super::settings::Settings;
 use super::generation_size::GenerationSize;
 use super::stop_criterion::{StopCriterion, StopReason};
 use super::utils::{get_individuals_fitness, sort_individuals, IdGenerator};
-use crate::expression_tree::{Computable, DefaultRandom, ExpressionTree, Random};
+use crate::expression_tree::random::{DefaultRandom, Random};
+use crate::expression_tree::{Computable, ExpressionTree};
 use rand::rngs::ThreadRng;
 use rand_distr::Normal;
 use std::rc::Rc;
@@ -240,7 +241,8 @@ impl PartialEq for Individual {
 mod tests {
     use super::super::stop_criterion::WithoutImprovement;
     use super::*;
-    use crate::expression_tree::{MockRandom, Node, OperationNode, ValueNode};
+    use crate::expression_tree::random::MockRandom;
+    use crate::expression_tree::{Node, OperationNode, ValueNode};
     use calamine::{DataType, Range, Reader, Xlsx};
     use std::cell::RefCell;
     use std::cmp::Ordering;

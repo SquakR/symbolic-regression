@@ -1,6 +1,7 @@
 //! Settings core functionality module.
 use super::types::{ConvertOutputData, Converter, ConverterOperation};
-use crate::expression_tree::{ExpressionTree, Function, Node, Operation, Operator, Random};
+use crate::expression_tree::random::Random;
+use crate::expression_tree::{ExpressionTree, Function, Node, Operation, Operator};
 use std::rc::Rc;
 
 #[derive(Debug, PartialEq)]
@@ -116,7 +117,8 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expression_tree::{MockRandom, ValueNode};
+    use crate::expression_tree::random::MockRandom;
+    use crate::expression_tree::ValueNode;
     use std::f64::consts::E;
 
     #[test]

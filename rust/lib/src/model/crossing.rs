@@ -1,5 +1,6 @@
 //! Module with crossing two expression trees.
-use crate::expression_tree::{ExpressionTree, Random};
+use crate::expression_tree::random::Random;
+use crate::expression_tree::ExpressionTree;
 
 pub fn cross<R>(
     expression_tree1: &ExpressionTree,
@@ -23,7 +24,8 @@ where
 mod tests {
     use super::super::settings::Settings;
     use super::*;
-    use crate::expression_tree::{MockRandom, Node, OperationNode, ValueNode};
+    use crate::expression_tree::random::MockRandom;
+    use crate::expression_tree::{Node, OperationNode, ValueNode};
 
     #[test]
     fn test_cross() {

@@ -1,6 +1,7 @@
 //! Module with expression tree mutations.
 use super::settings::Settings;
-use crate::expression_tree::{ExpressionTree, Node, OperationNode, Random, ValueNode};
+use crate::expression_tree::random::Random;
+use crate::expression_tree::{ExpressionTree, Node, OperationNode, ValueNode};
 use std::cmp::max;
 use std::rc::Rc;
 
@@ -166,7 +167,8 @@ fn prepare_arguments<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expression_tree::{MockRandom, ValueNode};
+    use crate::expression_tree::random::MockRandom;
+    use crate::expression_tree::ValueNode;
 
     #[test]
     fn test_replace_subtree_mutation() {
