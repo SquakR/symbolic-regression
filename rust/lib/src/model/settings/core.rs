@@ -11,7 +11,7 @@ pub struct NodeProbability {
 }
 
 pub struct Mutation {
-    pub mutation_fn: Box<dyn Fn(&mut ExpressionTree, &mut dyn Random, &Settings)>,
+    pub mutation_fn: Box<dyn Fn(&mut ExpressionTree, &mut dyn Random, &Settings) -> bool>,
     pub probability: f64,
 }
 
@@ -21,10 +21,11 @@ impl Mutation {
         expression_tree: &mut ExpressionTree,
         random: &mut R,
         settings: &Settings,
-    ) where
+    ) -> bool
+    where
         R: Random,
     {
-        (self.mutation_fn)(expression_tree, random, settings);
+        (self.mutation_fn)(expression_tree, random, settings)
     }
 }
 
@@ -96,11 +97,17 @@ impl Settings {
     {
         let random_probability = random.gen_float_standard();
         let mut probability = 0.0;
-        for mutation in &self.mutations {
-            probability += mutation.probability;
-            if random_probability < probability {
-                mutation.mutate(expression_tree, random, self);
-                break;
+        let mut executed = true;
+        let mut performed = false;
+        while executed && !performed {
+            executed = false;
+            for mutation in &self.mutations {
+                probability += mutation.probability;
+                if random_probability < probability {
+                    executed = true;
+                    performed = mutation.mutate(expression_tree, random, self);
+                    break;
+                }
             }
         }
     }

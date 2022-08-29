@@ -70,54 +70,6 @@ impl ExpressionTree {
     {
         self.get_node_at_mut(random.gen_range(0..self.count_nodes()))
     }
-    pub fn get_random_operator_node<R>(&self, random: &mut R) -> &Node
-    where
-        R: Random + ?Sized,
-    {
-        let operator_node_indices = self.get_operator_node_indices();
-        self.get_node_at(operator_node_indices[random.gen_range(0..operator_node_indices.len())])
-    }
-    pub fn get_random_operator_node_mut<R>(&mut self, random: &mut R) -> &mut Node
-    where
-        R: Random + ?Sized,
-    {
-        let operator_node_indices = self.get_operator_node_indices();
-        self.get_node_at_mut(
-            operator_node_indices[random.gen_range(0..operator_node_indices.len())],
-        )
-    }
-    pub fn get_random_function_node<R>(&self, random: &mut R) -> &Node
-    where
-        R: Random + ?Sized,
-    {
-        let function_node_indices = self.get_function_node_indices();
-        self.get_node_at(function_node_indices[random.gen_range(0..function_node_indices.len())])
-    }
-    pub fn get_random_function_node_mut<R>(&mut self, random: &mut R) -> &mut Node
-    where
-        R: Random + ?Sized,
-    {
-        let function_node_indices = self.get_function_node_indices();
-        self.get_node_at_mut(
-            function_node_indices[random.gen_range(0..function_node_indices.len())],
-        )
-    }
-    pub fn get_random_operation_node<R>(&self, random: &mut R) -> &Node
-    where
-        R: Random + ?Sized,
-    {
-        let mut indices = self.get_operator_node_indices();
-        indices.append(&mut self.get_function_node_indices());
-        self.get_node_at(indices[random.gen_range(0..indices.len())])
-    }
-    pub fn get_random_operation_node_mut<R>(&mut self, random: &mut R) -> &mut Node
-    where
-        R: Random + ?Sized,
-    {
-        let mut indices = self.get_operator_node_indices();
-        indices.append(&mut self.get_function_node_indices());
-        self.get_node_at_mut(indices[random.gen_range(0..indices.len())])
-    }
     pub fn get_random_value_node<R>(&self, random: &mut R) -> &Node
     where
         R: Random + ?Sized,
@@ -131,6 +83,80 @@ impl ExpressionTree {
     {
         let value_node_indices = self.get_value_node_indices();
         self.get_node_at_mut(value_node_indices[random.gen_range(0..value_node_indices.len())])
+    }
+    pub fn find_random_operator_node<R>(&self, random: &mut R) -> Option<&Node>
+    where
+        R: Random + ?Sized,
+    {
+        let operator_node_indices = self.get_operator_node_indices();
+        if operator_node_indices.len() == 0 {
+            return None;
+        }
+        Some(
+            self.get_node_at(
+                operator_node_indices[random.gen_range(0..operator_node_indices.len())],
+            ),
+        )
+    }
+    pub fn find_random_operator_node_mut<R>(&mut self, random: &mut R) -> Option<&mut Node>
+    where
+        R: Random + ?Sized,
+    {
+        let operator_node_indices = self.get_operator_node_indices();
+        if operator_node_indices.len() == 0 {
+            return None;
+        }
+        Some(self.get_node_at_mut(
+            operator_node_indices[random.gen_range(0..operator_node_indices.len())],
+        ))
+    }
+    pub fn find_random_function_node<R>(&self, random: &mut R) -> Option<&Node>
+    where
+        R: Random + ?Sized,
+    {
+        let function_node_indices = self.get_function_node_indices();
+        if function_node_indices.len() == 0 {
+            return None;
+        }
+        Some(
+            self.get_node_at(
+                function_node_indices[random.gen_range(0..function_node_indices.len())],
+            ),
+        )
+    }
+    pub fn find_random_function_node_mut<R>(&mut self, random: &mut R) -> Option<&mut Node>
+    where
+        R: Random + ?Sized,
+    {
+        let function_node_indices = self.get_function_node_indices();
+        if function_node_indices.len() == 0 {
+            return None;
+        }
+        Some(self.get_node_at_mut(
+            function_node_indices[random.gen_range(0..function_node_indices.len())],
+        ))
+    }
+    pub fn find_random_operation_node<R>(&self, random: &mut R) -> Option<&Node>
+    where
+        R: Random + ?Sized,
+    {
+        let mut indices = self.get_operator_node_indices();
+        indices.append(&mut self.get_function_node_indices());
+        if indices.len() == 0 {
+            return None;
+        }
+        Some(self.get_node_at(indices[random.gen_range(0..indices.len())]))
+    }
+    pub fn find_random_operation_node_mut<R>(&mut self, random: &mut R) -> Option<&mut Node>
+    where
+        R: Random + ?Sized,
+    {
+        let mut indices = self.get_operator_node_indices();
+        indices.append(&mut self.get_function_node_indices());
+        if indices.len() == 0 {
+            return None;
+        }
+        Some(self.get_node_at_mut(indices[random.gen_range(0..indices.len())]))
     }
 }
 
@@ -317,7 +343,7 @@ mod tests {
     #[test]
     fn test_get_random_node() {
         let settings = Settings::default();
-        let expression_tree = create_test_expression_tree(&settings);
+        let expression_tree = create_expression_tree(&settings);
         let expected_node = Node::Value(ValueNode::Constant(2.0));
         let actual_node = expression_tree.get_random_node(&mut MockRandom::new_int(vec![3]));
         assert_eq!(&expected_node, actual_node);
@@ -326,79 +352,15 @@ mod tests {
     #[test]
     fn test_get_random_node_mut() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
+        let mut expression_tree = create_expression_tree(&settings);
         let mut expected_node = Node::Value(ValueNode::Variable(String::from("x1")));
         let actual_node = expression_tree.get_random_node_mut(&mut MockRandom::new_int(vec![6]));
         assert_eq!(&mut expected_node, actual_node);
     }
-
-    #[test]
-    fn test_get_random_operator_node() {
-        let settings = Settings::default();
-        let expression_tree = create_test_expression_tree(&settings);
-        let expected_node = Node::Operator(OperationNode {
-            operation: settings.find_unary_operator_by_name("-").unwrap(),
-            arguments: vec![Node::Value(ValueNode::Constant(2.0))],
-        });
-        let actual_node =
-            expression_tree.get_random_operator_node(&mut MockRandom::new_int(vec![1]));
-        assert_eq!(&expected_node, actual_node);
-    }
-
-    #[test]
-    fn test_get_random_operator_node_mut() {
-        let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        let mut expected_node = create_plus_node(&settings);
-        let actual_node =
-            expression_tree.get_random_operator_node_mut(&mut MockRandom::new_int(vec![2]));
-        assert_eq!(&mut expected_node, actual_node);
-    }
-
-    #[test]
-    fn test_get_random_function_node() {
-        let settings = Settings::default();
-        let expression_tree = create_test_expression_tree(&settings);
-        let expected_node = &expression_tree.root;
-        let actual_node =
-            expression_tree.get_random_function_node(&mut MockRandom::new_int(vec![0]));
-        assert_eq!(expected_node, actual_node);
-    }
-
-    #[test]
-    fn test_get_random_function_node_mut() {
-        let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        let mut expected_node = create_cos_node(&settings);
-        let actual_node =
-            expression_tree.get_random_function_node_mut(&mut MockRandom::new_int(vec![1]));
-        assert_eq!(&mut expected_node, actual_node);
-    }
-
-    #[test]
-    fn test_get_random_operation_node() {
-        let settings = Settings::default();
-        let expression_tree = create_test_expression_tree(&settings);
-        let expected_node = create_plus_node(&settings);
-        let actual_node =
-            expression_tree.get_random_operation_node(&mut MockRandom::new_int(vec![2]));
-        assert_eq!(&expected_node, actual_node);
-    }
-
-    #[test]
-    fn test_get_random_operation_node_mut() {
-        let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        let mut expected_node = create_cos_node(&settings);
-        let actual_node =
-            expression_tree.get_random_operation_node_mut(&mut MockRandom::new_int(vec![4]));
-        assert_eq!(&mut expected_node, actual_node);
-    }
-
     #[test]
     fn test_get_random_value_node() {
         let settings = Settings::default();
-        let expression_tree = create_test_expression_tree(&settings);
+        let expression_tree = create_expression_tree(&settings);
         let expected_node = Node::Value(ValueNode::Constant(2.0));
         let actual_node = expression_tree.get_random_value_node(&mut MockRandom::new_int(vec![0]));
         assert_eq!(&expected_node, actual_node);
@@ -407,11 +369,122 @@ mod tests {
     #[test]
     fn test_get_random_value_node_mut() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
+        let mut expression_tree = create_expression_tree(&settings);
         let mut expected_node = Node::Value(ValueNode::Variable(String::from("x2")));
         let actual_node =
             expression_tree.get_random_value_node_mut(&mut MockRandom::new_int(vec![2]));
         assert_eq!(&mut expected_node, actual_node);
+    }
+
+    #[test]
+    fn test_find_random_operator_node() {
+        let settings = Settings::default();
+        let expression_tree = create_expression_tree(&settings);
+        let expected_node = Node::Operator(OperationNode {
+            operation: settings.find_unary_operator_by_name("-").unwrap(),
+            arguments: vec![Node::Value(ValueNode::Constant(2.0))],
+        });
+        let actual_node =
+            expression_tree.find_random_operator_node(&mut MockRandom::new_int(vec![1]));
+        assert_eq!(Some(&expected_node), actual_node);
+    }
+
+    #[test]
+    fn test_find_random_operator_node_none() {
+        let expression_tree = create_value_expression_tree();
+        let actual_node =
+            expression_tree.find_random_operator_node(&mut MockRandom::new_int(vec![0]));
+        assert_eq!(None, actual_node);
+    }
+
+    #[test]
+    fn test_find_random_operator_node_mut() {
+        let settings = Settings::default();
+        let mut expression_tree = create_expression_tree(&settings);
+        let mut expected_node = create_plus_node(&settings);
+        let actual_node =
+            expression_tree.find_random_operator_node_mut(&mut MockRandom::new_int(vec![2]));
+        assert_eq!(Some(&mut expected_node), actual_node);
+    }
+
+    #[test]
+    fn test_find_random_operator_node_mut_none() {
+        let expression_tree = create_value_expression_tree();
+        let actual_node =
+            expression_tree.find_random_operator_node(&mut MockRandom::new_int(vec![0]));
+        assert_eq!(None, actual_node);
+    }
+
+    #[test]
+    fn test_find_random_function_node() {
+        let settings = Settings::default();
+        let expression_tree = create_expression_tree(&settings);
+        let expected_node = &expression_tree.root;
+        let actual_node =
+            expression_tree.find_random_function_node(&mut MockRandom::new_int(vec![0]));
+        assert_eq!(Some(expected_node), actual_node);
+    }
+
+    #[test]
+    fn test_find_random_function_node_none() {
+        let expression_tree = create_value_expression_tree();
+        let actual_node =
+            expression_tree.find_random_function_node(&mut MockRandom::new_int(vec![0]));
+        assert_eq!(None, actual_node);
+    }
+
+    #[test]
+    fn test_find_random_function_node_mut() {
+        let settings = Settings::default();
+        let mut expression_tree = create_expression_tree(&settings);
+        let mut expected_node = create_cos_node(&settings);
+        let actual_node =
+            expression_tree.find_random_function_node_mut(&mut MockRandom::new_int(vec![1]));
+        assert_eq!(Some(&mut expected_node), actual_node);
+    }
+
+    #[test]
+    fn test_find_random_function_node_mut_none() {
+        let mut expression_tree = create_value_expression_tree();
+        let actual_node =
+            expression_tree.find_random_function_node_mut(&mut MockRandom::new_int(vec![0]));
+        assert_eq!(None, actual_node);
+    }
+
+    #[test]
+    fn test_find_random_operation_node() {
+        let settings = Settings::default();
+        let expression_tree = create_expression_tree(&settings);
+        let expected_node = create_plus_node(&settings);
+        let actual_node =
+            expression_tree.find_random_operation_node(&mut MockRandom::new_int(vec![2]));
+        assert_eq!(Some(&expected_node), actual_node);
+    }
+
+    #[test]
+    fn test_find_random_operation_node_none() {
+        let expression_tree = create_value_expression_tree();
+        let actual_node =
+            expression_tree.find_random_operation_node(&mut MockRandom::new_int(vec![0]));
+        assert_eq!(None, actual_node);
+    }
+
+    #[test]
+    fn test_find_random_operation_node_mut() {
+        let settings = Settings::default();
+        let mut expression_tree = create_expression_tree(&settings);
+        let mut expected_node = create_cos_node(&settings);
+        let actual_node =
+            expression_tree.find_random_operation_node_mut(&mut MockRandom::new_int(vec![4]));
+        assert_eq!(Some(&mut expected_node), actual_node);
+    }
+
+    #[test]
+    fn test_find_random_operation_node_mut_none() {
+        let mut expression_tree = create_value_expression_tree();
+        let actual_node =
+            expression_tree.find_random_operation_node_mut(&mut MockRandom::new_int(vec![0]));
+        assert_eq!(None, actual_node);
     }
 
     #[test]
@@ -488,7 +561,7 @@ mod tests {
     #[test]
     fn test_create_random_expression_tree() {
         let settings = Settings::default();
-        let expected_expression_tree = create_test_expression_tree(&settings);
+        let expected_expression_tree = create_expression_tree(&settings);
         let actual_expression_tree = ExpressionTree::create_random(
             &mut MockRandom::new(
                 vec![2, 2, 6, 4, 0, 0, 1],
@@ -503,7 +576,7 @@ mod tests {
         assert_eq!(expected_expression_tree, actual_expression_tree);
     }
 
-    fn create_test_expression_tree(settings: &Settings) -> ExpressionTree {
+    fn create_expression_tree(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Function(OperationNode {
                 operation: settings.find_function_by_name("sin").unwrap(),
@@ -518,6 +591,13 @@ mod tests {
                     ],
                 })],
             }),
+            variables: vec![String::from("x1"), String::from("x2")],
+        }
+    }
+
+    fn create_value_expression_tree() -> ExpressionTree {
+        ExpressionTree {
+            root: Node::Value(ValueNode::Variable(String::from("x1"))),
             variables: vec![String::from("x1"), String::from("x2")],
         }
     }

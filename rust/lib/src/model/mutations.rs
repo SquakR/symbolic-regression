@@ -8,7 +8,8 @@ pub fn replace_subtree_mutation<R>(
     expression_tree: &mut ExpressionTree,
     random: &mut R,
     settings: &Settings,
-) where
+) -> bool
+where
     R: Random + ?Sized,
 {
     let variables = expression_tree.variables.clone();
@@ -20,20 +21,27 @@ pub fn replace_subtree_mutation<R>(
         0,
     ) as u32;
     *node = Node::create_random(random, settings, &variables, complexity).node;
+    true
 }
 
 pub fn replace_leaf_mutation<R>(
     expression_tree: &mut ExpressionTree,
     random: &mut R,
     settings: &Settings,
-) where
+) -> bool
+where
     R: Random + ?Sized,
 {
     *expression_tree.get_random_value_node_mut(random) =
         Node::create_random_value(random, settings, &expression_tree.variables).node;
+    true
 }
 
-pub fn shift_leaf_mutation<R>(expression_tree: &mut ExpressionTree, random: &mut R, _: &Settings)
+pub fn shift_leaf_mutation<R>(
+    expression_tree: &mut ExpressionTree,
+    random: &mut R,
+    _: &Settings,
+) -> bool
 where
     R: Random + ?Sized,
 {
@@ -49,20 +57,24 @@ where
             *random_value_node = Node::Value(ValueNode::Constant(constant));
         }
         _ => unreachable!(),
-    }
+    };
+    true
 }
 
 pub fn replace_operation_mutation<R>(
     expression_tree: &mut ExpressionTree,
     random: &mut R,
     settings: &Settings,
-) where
+) -> bool
+where
     R: Random + ?Sized,
 {
     let variables = expression_tree.variables.clone();
     let tree_complexity = expression_tree.get_complexity(settings);
-    let complexity_random = 10 - random.gen_range(0..21) as i32;
-    let node = expression_tree.get_random_operation_node_mut(random);
+    let node = match expression_tree.find_random_operation_node_mut(random) {
+        Some(node) => node,
+        None => return false,
+    };
     let (mut arguments, operation_complexity) = match node {
         Node::Operator(operator_node) => (
             operator_node.take_arguments(),
@@ -74,6 +86,7 @@ pub fn replace_operation_mutation<R>(
         ),
         _ => unreachable!(),
     };
+    let complexity_random = 10 - random.gen_range(0..21) as i32;
     let complexity = max(
         tree_complexity as i32 - operation_complexity as i32 + complexity_random,
         0,
@@ -107,23 +120,29 @@ pub fn replace_operation_mutation<R>(
             operation: function,
             arguments,
         })
-    }
+    };
+    true
 }
 
 pub fn remove_operation_mutation<R>(
     expression_tree: &mut ExpressionTree,
     random: &mut R,
     _: &Settings,
-) where
+) -> bool
+where
     R: Random + ?Sized,
 {
-    let node = expression_tree.get_random_operation_node_mut(random);
+    let node = match expression_tree.find_random_operation_node_mut(random) {
+        Some(node) => node,
+        None => return false,
+    };
     let mut arguments = match node {
         Node::Operator(operator_node) => operator_node.take_arguments(),
         Node::Function(function_node) => function_node.take_arguments(),
         _ => unreachable!(),
     };
     *node = arguments.remove(random.gen_range(0..arguments.len()));
+    true
 }
 
 fn prepare_arguments<R>(
@@ -152,8 +171,8 @@ mod tests {
     #[test]
     fn test_replace_subtree_mutation() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        replace_subtree_mutation(
+        let mut expression_tree = create_expression_tree(&settings);
+        let performed = replace_subtree_mutation(
             &mut expression_tree,
             &mut MockRandom::new(vec![10, 1, 0], vec![], vec![0.62, 0.45]),
             &settings,
@@ -165,14 +184,15 @@ mod tests {
             }),
             variables: vec![String::from("x")],
         };
+        assert!(performed);
         assert_eq!(expected_expression_tree, expression_tree);
     }
 
     #[test]
     fn test_replace_leaf_mutation() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        replace_leaf_mutation(
+        let mut expression_tree = create_expression_tree(&settings);
+        let performed = replace_leaf_mutation(
             &mut expression_tree,
             &mut MockRandom::new(vec![0], vec![], vec![0.45]),
             &settings,
@@ -196,15 +216,16 @@ mod tests {
             }),
             variables: vec![String::from("x")],
         };
+        assert!(performed);
         assert_eq!(expected_expression_tree, expression_tree);
     }
 
     #[test]
     fn test_shift_leaf_mutation_variable() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
+        let mut expression_tree = create_expression_tree(&settings);
         expression_tree.variables = vec![String::from("x1"), String::from("x2")];
-        shift_leaf_mutation(
+        let performed = shift_leaf_mutation(
             &mut expression_tree,
             &mut MockRandom::new_int(vec![1, 1]),
             &settings,
@@ -228,14 +249,15 @@ mod tests {
             }),
             variables: vec![String::from("x1"), String::from("x2")],
         };
+        assert!(performed);
         assert_eq!(expected_expression_tree, expression_tree);
     }
 
     #[test]
     fn test_shift_leaf_mutation_constant() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        shift_leaf_mutation(
+        let mut expression_tree = create_expression_tree(&settings);
+        let performed = shift_leaf_mutation(
             &mut expression_tree,
             &mut MockRandom::new(vec![0, 25], vec![], vec![0.5]),
             &settings,
@@ -259,16 +281,17 @@ mod tests {
             }),
             variables: vec![String::from("x")],
         };
+        assert!(performed);
         assert_eq!(expected_expression_tree, expression_tree);
     }
 
     #[test]
     fn test_replace_operation_mutation_operator_to_function() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        replace_operation_mutation(
+        let mut expression_tree = create_expression_tree(&settings);
+        let performed = replace_operation_mutation(
             &mut expression_tree,
-            &mut MockRandom::new_int(vec![10, 0, 11, 0]),
+            &mut MockRandom::new_int(vec![0, 10, 11, 0]),
             &settings,
         );
         let expected_expression_tree = ExpressionTree {
@@ -287,16 +310,17 @@ mod tests {
             }),
             variables: vec![String::from("x")],
         };
+        assert!(performed);
         assert_eq!(expected_expression_tree, expression_tree);
     }
 
     #[test]
     fn test_replace_operation_mutation_function_to_operator() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        replace_operation_mutation(
+        let mut expression_tree = create_expression_tree(&settings);
+        let performed = replace_operation_mutation(
             &mut expression_tree,
-            &mut MockRandom::new(vec![10, 1, 2], vec![-5.0], vec![0.43, 0.55]),
+            &mut MockRandom::new(vec![1, 10, 2], vec![-5.0], vec![0.43, 0.55]),
             &settings,
         );
         let expected_expression_tree = ExpressionTree {
@@ -321,14 +345,27 @@ mod tests {
             }),
             variables: vec![String::from("x")],
         };
+        assert!(performed);
         assert_eq!(expected_expression_tree, expression_tree);
+    }
+
+    #[test]
+    fn test_replace_operation_mutation_not_performed() {
+        let settings = Settings::default();
+        let mut expression_tree = create_value_expression_tree();
+        let performed = replace_operation_mutation(
+            &mut expression_tree,
+            &mut MockRandom::new_int(vec![]),
+            &settings,
+        );
+        assert!(!performed);
     }
 
     #[test]
     fn test_remove_operation_mutation() {
         let settings = Settings::default();
-        let mut expression_tree = create_test_expression_tree(&settings);
-        remove_operation_mutation(
+        let mut expression_tree = create_expression_tree(&settings);
+        let performed = remove_operation_mutation(
             &mut expression_tree,
             &mut MockRandom::new_int(vec![2, 0]),
             &settings,
@@ -340,10 +377,23 @@ mod tests {
             }),
             variables: vec![String::from("x")],
         };
+        assert!(performed);
         assert_eq!(expected_expression_tree, expression_tree);
     }
 
-    fn create_test_expression_tree(settings: &Settings) -> ExpressionTree {
+    #[test]
+    fn test_remove_operation_mutation_not_performed() {
+        let settings = Settings::default();
+        let mut expression_tree = create_value_expression_tree();
+        let performed = remove_operation_mutation(
+            &mut expression_tree,
+            &mut MockRandom::new_int(vec![]),
+            &settings,
+        );
+        assert!(!performed);
+    }
+
+    fn create_expression_tree(settings: &Settings) -> ExpressionTree {
         ExpressionTree {
             root: Node::Function(OperationNode {
                 operation: settings.find_function_by_name("sin").unwrap(),
@@ -361,6 +411,13 @@ mod tests {
                     ],
                 })],
             }),
+            variables: vec![String::from("x")],
+        }
+    }
+
+    fn create_value_expression_tree() -> ExpressionTree {
+        ExpressionTree {
+            root: Node::Value(ValueNode::Variable(String::from("x"))),
             variables: vec![String::from("x")],
         }
     }
