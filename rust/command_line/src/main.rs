@@ -1,5 +1,6 @@
 use calamine::{Reader, Xlsx};
 use clap::Parser;
+use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -170,9 +171,10 @@ fn run_model(
 ) -> RunResult {
     let log = !cli.log_path.is_none();
     let log_every = cli.log_every;
-    let mut generation_counter = 0;
     let generations = Rc::new(RefCell::new(vec![]));
     let generation_copy = Rc::clone(&generations);
+    let progress_bar = Rc::new(RefCell::new(create_progress_bar(&stop_criterion)));
+    let progress_bar_copy = Rc::clone(&progress_bar);
     let mut model = Model::new(
         settings,
         input_data,
@@ -180,20 +182,42 @@ fn run_model(
         generation_size,
         auxiliary_expression_trees,
         Some(Box::new(move |generation| {
-            if log && generation_counter % log_every == 0 {
+            if log && progress_bar_copy.borrow().position() as usize % log_every == 0 {
                 generation_copy
                     .borrow_mut()
                     .push(generation.iter().cloned().collect::<Vec<Rc<Individual>>>())
             }
-            generation_counter += 1;
+            if progress_bar_copy.borrow().position() + 1
+                >= progress_bar_copy.borrow().length().unwrap()
+            {
+                progress_bar_copy.borrow_mut().inc_length(1000);
+            }
+            progress_bar_copy.borrow_mut().inc(1);
         })),
     );
     let model_result = model.run();
+    progress_bar.borrow_mut().finish_and_clear();
     drop(model);
     RunResult {
         model_result,
         generations: generations.take(),
     }
+}
+
+fn create_progress_bar(stop_criterion: &StopCriterion) -> ProgressBar {
+    let pb = if let Some(generation_number) = stop_criterion.generation_number {
+        ProgressBar::new(generation_number as u64)
+    } else {
+        ProgressBar::new(1000)
+    };
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos:>7}/{len:7}",
+        )
+        .unwrap()
+        .progress_chars("#>-"),
+    );
+    pb
 }
 
 fn print_model_result(output_variable: String, model_result: Result<ModelResult, FitnessError>) {
