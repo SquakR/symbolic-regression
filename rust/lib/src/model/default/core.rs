@@ -124,6 +124,11 @@ impl<R: Random> Model<R> {
         if self.auxiliary_expression_trees.len() > 0 {
             expression_trees.push(self.auxiliary_expression_trees.remove(0));
         }
+        expression_trees.push(ExpressionTree::create_random(
+            &mut self.random,
+            &self.settings,
+            &self.input_data.variables[0..self.input_data.variables.len() - 1],
+        ));
         individuals.append(&mut self.create_individuals(expression_trees, generation_number)?);
         sort_individuals(&mut individuals);
         individuals.drain(self.generation_size.generation_len as usize..);
@@ -381,7 +386,12 @@ mod tests {
 
     #[test]
     fn test_create_next_generation() -> Result<(), FitnessError> {
-        let mut model = create_model(10, 6, Some(create_auxiliary_individuals_random()), None);
+        let random = MockRandom::new(
+            vec![1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0],
+            vec![100.0],
+            vec![0.95],
+        );
+        let mut model = create_model(10, 6, Some(random), None);
         let mut current_generation = vec![];
         for i in 0..3 {
             current_generation.append(&mut create_auxiliary_individuals(
@@ -458,7 +468,7 @@ mod tests {
             6,
             Some(MockRandom::new(
                 vec![2, 0, 2, 0, 1, 0, 2, 0, 1, 0, 0, 0, 2, 0, 1],
-                vec![],
+                vec![100.0],
                 vec![0.95, 0.85],
             )),
             Some(Box::new(move |individuals| {

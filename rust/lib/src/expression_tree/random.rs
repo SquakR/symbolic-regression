@@ -285,9 +285,9 @@ impl Node {
 }
 
 pub struct MockRandom {
-    int: Option<Box<dyn Iterator<Item = usize>>>,
-    float: Option<Box<dyn Iterator<Item = f64>>>,
-    float_standard: Option<Box<dyn Iterator<Item = f64>>>,
+    pub int: Option<Box<dyn Iterator<Item = usize>>>,
+    pub float: Option<Box<dyn Iterator<Item = f64>>>,
+    pub float_standard: Option<Box<dyn Iterator<Item = f64>>>,
 }
 
 impl MockRandom {
