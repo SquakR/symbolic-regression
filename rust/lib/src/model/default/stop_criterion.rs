@@ -4,12 +4,12 @@ use serde::Deserialize;
 #[derive(Debug, PartialEq)]
 pub enum StopReason {
     Error(f64),
-    WithoutImprovement(WithoutImprovement),
-    GenerationNumber(u32),
+    WithoutImprovement(StopData),
+    GenerationNumber(StopData),
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
-pub struct WithoutImprovement {
+pub struct StopData {
     pub error: f64,
     pub generation_number: u32,
 }
@@ -17,14 +17,14 @@ pub struct WithoutImprovement {
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct StopCriterion {
     pub error: Option<f64>,
-    pub without_improvement: Option<WithoutImprovement>,
+    pub without_improvement: Option<StopData>,
     pub generation_number: Option<u32>,
 }
 
 impl StopCriterion {
     pub fn new(
         error: Option<f64>,
-        without_improvement: Option<WithoutImprovement>,
+        without_improvement: Option<StopData>,
         generation_number: Option<u32>,
     ) -> StopCriterion {
         assert!(
@@ -50,7 +50,7 @@ impl StopCriterion {
         }
         if let Some(without_improvement) = &self.without_improvement {
             if without_improvement_generation_number >= without_improvement.generation_number {
-                return Some(StopReason::WithoutImprovement(WithoutImprovement {
+                return Some(StopReason::WithoutImprovement(StopData {
                     error,
                     generation_number: without_improvement_generation_number,
                 }));
@@ -58,7 +58,10 @@ impl StopCriterion {
         }
         if let Some(number) = self.generation_number {
             if generation_number >= number {
-                return Some(StopReason::GenerationNumber(generation_number));
+                return Some(StopReason::GenerationNumber(StopData {
+                    error,
+                    generation_number,
+                }));
             }
         }
         return None;
@@ -79,7 +82,7 @@ mod tests {
     fn test_new() {
         let expected_stop_criterion = StopCriterion {
             generation_number: Some(100),
-            without_improvement: Some(WithoutImprovement {
+            without_improvement: Some(StopData {
                 error: 0.001,
                 generation_number: 3,
             }),
@@ -109,7 +112,7 @@ mod tests {
     #[test]
     fn test_must_stop_without_improvement() {
         let stop_criterion = create_test_stop_criterion();
-        let expected_stop_reason = Some(StopReason::WithoutImprovement(WithoutImprovement {
+        let expected_stop_reason = Some(StopReason::WithoutImprovement(StopData {
             error: 0.01,
             generation_number: 3,
         }));
@@ -119,7 +122,10 @@ mod tests {
     #[test]
     fn test_must_stop_generation_number() {
         let stop_criterion = create_test_stop_criterion();
-        let expected_stop_reason = Some(StopReason::GenerationNumber(100));
+        let expected_stop_reason = Some(StopReason::GenerationNumber(StopData {
+            error: 0.01,
+            generation_number: 100,
+        }));
         assert_eq!(expected_stop_reason, stop_criterion.must_stop(0.01, 2, 100));
     }
 
@@ -136,7 +142,7 @@ mod tests {
     fn create_test_stop_criterion() -> StopCriterion {
         StopCriterion::new(
             Some(0.001),
-            Some(WithoutImprovement {
+            Some(StopData {
                 error: 0.001,
                 generation_number: 3,
             }),

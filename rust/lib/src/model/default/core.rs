@@ -245,7 +245,7 @@ impl PartialEq for Individual {
 
 #[cfg(test)]
 mod tests {
-    use super::super::stop_criterion::WithoutImprovement;
+    use super::super::stop_criterion::StopData;
     use super::*;
     use crate::expression_tree::random::MockRandom;
     use crate::expression_tree::{Node, OperationNode, ValueNode};
@@ -558,7 +558,7 @@ mod tests {
     fn create_stop_criterion() -> StopCriterion {
         StopCriterion::new(
             Some(0.001),
-            Some(WithoutImprovement {
+            Some(StopData {
                 error: 0.001,
                 generation_number: 3,
             }),

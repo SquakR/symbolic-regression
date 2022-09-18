@@ -39,6 +39,7 @@ struct Config {
     stop_criterion: StopCriterion,
     generation_size: GenerationSize,
     auxiliary_expressions: Vec<String>,
+    complexity_impact: Option<f32>,
 }
 
 struct RunResult {
@@ -48,13 +49,17 @@ struct RunResult {
 
 fn main() {
     let cli = Cli::parse();
-    let settings = Settings::default();
     let input_data = read_input_data(&cli);
+    let mut settings = Settings::default();
     let Config {
         stop_criterion,
         generation_size,
         auxiliary_expressions,
+        complexity_impact,
     } = read_config(&cli);
+    if let Some(complexity_impact) = complexity_impact {
+        settings.complexity_impact = complexity_impact;
+    }
     let auxiliary_expression_trees = parse_expression_trees(
         &settings,
         auxiliary_expressions,
@@ -235,8 +240,9 @@ fn print_model_result(output_variable: String, model_result: Result<ModelResult,
                     without_improvement.error
                 ),
                 StopReason::GenerationNumber(generation_number) => println!(
-                    "The reason for stopping is the maximum number of generations, equal to {}",
-                    generation_number
+                    "The reason for stopping is the maximum number of generations equal to {}, error equal to {}",
+                    generation_number.generation_number,
+                    generation_number.error
                 )
             };
         }
