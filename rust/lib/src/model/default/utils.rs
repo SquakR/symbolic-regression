@@ -28,13 +28,13 @@ pub fn get_individuals_fitness(individuals: &[Rc<Individual>]) -> f64 {
         / valid_individuals.count() as f64
 }
 
-pub fn sort_individuals(individuals: &mut Vec<Rc<Individual>>) {
+pub fn sort_individuals(individuals: &mut Vec<Rc<Individual>>, complexity_impact: f32) {
     let mut points = HashMap::new();
     for individual in individuals.iter() {
         points.insert(individual.id, 0.0);
     }
     add_individual_error_points(individuals, &mut points);
-    add_individual_complexity_points(individuals, &mut points);
+    add_individual_complexity_points(individuals, &mut points, complexity_impact);
     individuals.sort_by(|i1, i2| points[&i2.id].partial_cmp(&points[&i1.id]).unwrap())
 }
 
@@ -50,12 +50,13 @@ fn add_individual_error_points(individuals: &[Rc<Individual>], points: &mut Hash
 fn add_individual_complexity_points(
     individuals: &[Rc<Individual>],
     points: &mut HashMap<u32, f32>,
+    complexity_impact: f32,
 ) {
     add_individual_points(
         individuals,
         points,
         |i1, i2| i2.fitness.complexity.cmp(&i1.fitness.complexity),
-        2.0,
+        1.0 / complexity_impact,
     );
 }
 
@@ -120,7 +121,7 @@ mod tests {
         for individual in individuals.iter() {
             points.insert(individual.id, 0.0);
         }
-        add_individual_complexity_points(&individuals, &mut points);
+        add_individual_complexity_points(&individuals, &mut points, 0.5);
         let expected_points = HashMap::from([(0, 0.0), (1, 0.5), (2, 1.5), (3, 1.0)]);
         assert_eq!(expected_points, points);
     }
@@ -133,7 +134,7 @@ mod tests {
             .cloned()
             .rev()
             .collect::<Vec<Rc<Individual>>>();
-        sort_individuals(&mut individuals);
+        sort_individuals(&mut individuals, 0.5);
         assert_eq!(expected_individuals, individuals);
     }
 

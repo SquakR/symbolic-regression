@@ -87,7 +87,7 @@ impl<R: Random> Model<R> {
     fn create_first_generation(&mut self) -> Result<Vec<Rc<Individual>>, FitnessError> {
         let initial_expression_trees = self.create_initial_expression_trees();
         let mut first_generation = self.create_individuals(initial_expression_trees, 0)?;
-        sort_individuals(&mut first_generation);
+        sort_individuals(&mut first_generation, self.settings.complexity_impact);
         Ok(first_generation)
     }
     fn create_initial_expression_trees(&mut self) -> Vec<ExpressionTree> {
@@ -130,7 +130,7 @@ impl<R: Random> Model<R> {
             &self.input_data.variables[0..self.input_data.variables.len() - 1],
         ));
         individuals.append(&mut self.create_individuals(expression_trees, generation_number)?);
-        sort_individuals(&mut individuals);
+        sort_individuals(&mut individuals, self.settings.complexity_impact);
         individuals.drain(self.generation_size.generation_len as usize..);
         Ok(individuals)
     }

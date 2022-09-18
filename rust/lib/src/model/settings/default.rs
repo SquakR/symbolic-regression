@@ -17,6 +17,7 @@ impl Default for Settings {
             converters: vec![],
             variable_complexity: 1,
             constant_complexity: 1,
+            complexity_impact: 0.5,
             get_node_probability_fn: Box::new(|tree_complexity| {
                 let operation_node_probability = 4.0 / (tree_complexity + 9) as f64;
                 NodeProbability {
